@@ -71,14 +71,12 @@ if __name__ == "__main__":
         motor2 = Motor(PIN_MOTOR2_LEGB, PIN_MOTOR2_LEGA, io, 1000)
 
         # 4.4
-        def meter_drive(level, sleep_time):
-            motor1.setlevel(level)
-            motor2.setlevel(level)
+        def meter_drive(level1, level2, sleep_time):
+            motor1.setlevel(level1)
+            motor2.setlevel(level2)
             time.sleep(sleep_time)
             motor1.stop()
             motor2.stop()
-
-        # meter_drive(1, 2.2)
 
         # 4.5
         def right_turn(level, sleep_time):
@@ -88,8 +86,6 @@ if __name__ == "__main__":
             motor1.stop()
             motor2.stop()
 
-        # right_turn(1, 0.405)
-
         # 4.6
         def square_drive():
             for i in range(4):
@@ -97,10 +93,18 @@ if __name__ == "__main__":
                 time.sleep(1.0)
                 right_turn(0.8, .59)
                 time.sleep(1.0)
+        def new_turn(level1, level2, sleep_time):
+            motor1.setlevel(level1)
+            motor2.setlevel(level2)
+            time.sleep(sleep_time)
+            motor1.stop()
+            motor2.stop()
 
-        meter_drive(1, 2.45)
-        right_turn(0.8, 0.59)
-        square_drive()
+        # meter_drive(0.9, 0.878, 2.6)
+        new_turn(0.90, 1, 5)
+        # right_veer = 1, 0.9, 5
+        
+        # square_drive()
 
         # Clear the PINs (commands).
         io.set_PWM_dutycycle(PIN_MOTOR1_LEGA, 0)
