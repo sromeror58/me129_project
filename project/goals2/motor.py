@@ -93,15 +93,8 @@ if __name__ == "__main__":
                 time.sleep(1.0)
                 right_turn(0.8, .59)
                 time.sleep(1.0)
-        def new_turn(level1, level2, sleep_time):
-            motor1.setlevel(level1)
-            motor2.setlevel(level2)
-            time.sleep(sleep_time)
-            motor1.stop()
-            motor2.stop()
 
         # meter_drive(0.9, 0.878, 2.6)
-        new_turn(0.90, 1, 5)
         # right_veer = 1, 0.9, 5
         
         # square_drive()

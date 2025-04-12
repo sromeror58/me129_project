@@ -46,6 +46,7 @@ class DriveSystem():
         self.motor2.setlevel(drive_val.level2)
 
 if __name__ == "__main__":
+    # testing purposes for different drive modes
     try:
         PIN_MOTOR1_LEGA = 8
         PIN_MOTOR1_LEGB = 7
