@@ -31,7 +31,16 @@ SPIN_L = "SPIN_L"
 
 
 class Robot():
+    """
+    Class that encapsulates all the robot components such as the drive system 
+    and sensors.
+    """
     def __init__(self, io):
+        """Initializes the motors, drive system and sensors.
+
+        Args:
+            io (pigpio.pi): pigpio interface instance
+        """
         self.io = io
         motor1 = Motor(PIN_MOTOR1_LEGA, PIN_MOTOR1_LEGB, io, 1000)
         motor2 = Motor(PIN_MOTOR2_LEGB, PIN_MOTOR2_LEGA, io, 1000)
@@ -39,6 +48,9 @@ class Robot():
         self.sensors = LineSensor(io, PIN_IR_LEFT, PIN_IR_MIDDLE, PIN_IR_RIGHT)
     
     def run_basic(self):
+        """
+        This runs the most basic path following task (goals 2, task 4)
+        """
         while True:
             reading = self.sensors.read()
             if reading == (0, 1, 0):
@@ -55,6 +67,10 @@ class Robot():
                 # considering the other 3 cases i.e. 101, 111, and 000
                 self.drive_system.stop()
     def run_complex(self):
+        """
+        This runs a more complex path following task with the turn 
+        around aspect incorporated (goals 2, task 5.1)
+        """
         while True:
             reading = self.sensors.read()
             if reading == (0, 1, 0):
@@ -74,6 +90,10 @@ class Robot():
                 self.drive_system.stop()
 
 def main_basic():
+    """
+    Initializes the io, and robot object to perform the most basic path
+    following task (goals 2, task 4)
+    """
     io = pigpio.pi()
     robot = Robot(io)
     try:
@@ -83,10 +103,14 @@ def main_basic():
         print("Ending due to exception: %s" % repr(ex))
         traceback.print_exc()
     # Shutdown cleanly (stopping the motors, then stopping the io).
-    drive.stop()
-    io.stop()
+    robot.drive_system.drive.stop()
+    robot.io.stop()
 
 def main_complex():
+    """
+    Initializes the io, and robot object to perform the more complex path 
+    following task (goals 2, task 5.1)
+    """
     io = pigpio.pi()
     robot = Robot(io)
     try:
@@ -96,8 +120,8 @@ def main_complex():
         print("Ending due to exception: %s" % repr(ex))
         traceback.print_exc()
     # Shutdown cleanly (stopping the motors, then stopping the io).
-    drive.stop()
-    io.stop()
+    robot.drive_system.drive.stop()
+    robot.io.stop()
 
 
 if __name__ == "__main__":
