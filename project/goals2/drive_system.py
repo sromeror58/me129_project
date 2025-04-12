@@ -13,17 +13,17 @@ class DriveSystem():
     DRIVE_STYLES = {
         "STRAIGHT": (0.7537, 0.719),
 
-        "VEER_L": (0.6, 0.75),
-        "STEER_L": (0.8, 0.0),
-        "TURN_L": (0.8, -0.2),
-        "HOOK_L": (0.8, -0.4),
-        "SPIN_L": (0.8, -0.8),
+        "VEER_L": (0.73, 0.77),
+        "STEER_L": (0.62, 0.77),
+        "TURN_L": (0.47, 0.79), 
+        "HOOK_L": (0.0, 0.65),
+        "SPIN_L": (-0.7, 0.65), # might be done
 
-        "VEER_R": (0.8, 0.2),
-        "STEER_R": (0.8, 0.0),
-        "TURN_R": (0.8, -0.2),
-        "HOOK_R": (0.8, -0.4),
-        "SPIN_R": (0.8, -0.8),
+        "VEER_R": (0.77, 0.67),
+        "STEER_R": (0.79, 0.60),
+        "TURN_R": (0.82, 0.45),
+        "HOOK_R": (0.64, 0),
+        "SPIN_R": (0.75, -0.70), # need to polish
     }
     
     def __init__(self, io, motor1: Motor, motor2: Motor):
@@ -57,7 +57,7 @@ if __name__ == "__main__":
         motor2 = Motor(PIN_MOTOR2_LEGB, PIN_MOTOR2_LEGA, io, 1000)
 
         ds = DriveSystem(io, motor1, motor2) 
-        ds.drive("STRAIGHT")
+        ds.drive("SPIN_L")
         time.sleep(4)
         ds.stop()
 
