@@ -20,8 +20,7 @@ motor2 = Motor(PIN_MOTOR2_LEGB, PIN_MOTOR2_LEGA, io, 1000)
 
 ds = DriveSystem(io, motor1, motor2) 
 
-
-for style in ["STRAIGHT", "VEER_L", "STEER_L", "TURN_L", "HOOK_L", "SPIN_L", "VEER_R", "STEER_R", "TURN_R", "HOoK_R", "SPIN_R"]:
+for style in ds.DRIVE_STYLES:
     ds.drive(style)
     time.sleep(4)
     ds.stop()
