@@ -88,6 +88,13 @@ class Robot():
             else:
                 # considering the other 3 cases i.e. 101, 111, and 000
                 self.drive_system.stop()
+    def stop(self):
+        self.drive_system.stop()
+        self.io.set_PWM_dutycycle(PIN_MOTOR1_LEGA, 0)
+        self.io.set_PWM_dutycycle(PIN_MOTOR1_LEGB, 0)
+        self.io.set_PWM_dutycycle(PIN_MOTOR2_LEGA, 0)
+        self.io.set_PWM_dutycycle(PIN_MOTOR2_LEGB, 0)
+        self.io.stop()
 
 def main_basic():
     """
@@ -114,14 +121,16 @@ def main_complex():
     io = pigpio.pi()
     robot = Robot(io)
     try:
-        robot.run_complex()
+        robot.run_complex() 
+    except KeyboardInterrupt:
+        print("\nKeyboardInterrupt received. Shutting down robot.")
+        robot.stop()
     except:
         # Report the error, then continue with the normal shutdown.
         print("Ending due to exception: %s" % repr(ex))
         traceback.print_exc()
     # Shutdown cleanly (stopping the motors, then stopping the io).
-    robot.drive_system.drive.stop()
-    robot.io.stop()
+    robot.stop()
 
 
 if __name__ == "__main__":

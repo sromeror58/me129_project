@@ -1,0 +1,249 @@
+# Imports
+import pigpio
+import sys
+import time
+import traceback
+from drive_system import DriveSystem
+from sensor import LineSensor
+from motor import Motor
+from config import *
+from sensor_estimation import IntersectionEstimator, SideEstimator, EndOfStreetEstimator
+
+class Robot():
+    """
+    Class that encapsulates all the robot components such as the drive system 
+    and sensors.
+    """
+    def __init__(self, io):
+        """Initializes the motors, drive system and sensors.
+
+        Args:
+            io (pigpio.pi): pigpio interface instance
+        """
+        self.io = io
+        motor1 = Motor(PIN_MOTOR1_LEGA, PIN_MOTOR1_LEGB, io, 1000)
+        motor2 = Motor(PIN_MOTOR2_LEGB, PIN_MOTOR2_LEGA, io, 1000)
+        self.drive_system = DriveSystem(io, motor1, motor2)
+        self.sensors = LineSensor(io, PIN_IR_LEFT, PIN_IR_MIDDLE, PIN_IR_RIGHT)
+    
+    def pull_forward(self, intersection_estimator, threshold=0.5):
+        """Performs the pull forward behavior after detecting a valid intersection.
+
+        Args:
+            intersection_estimator (IntersectionEstimator): IntersectionEstimator object
+            threshold (float): Threshold for state changes (default 0.5, ~one time constant)
+        """
+        self.drive_system.stop()
+        t_0 = intersection_estimator.tlast
+        curr = time.time()
+        while curr - t_0 <= threshold:
+            self.drive_system.drive(STRAIGHT)
+            curr = time.time()
+        self.drive_system.stop()
+
+    def run_complex(self):
+        """
+        This runs a more complex path following task with the turn 
+        around aspect incorporated (goals 2, task 5.1)
+        """
+
+        # Initialize estimators
+        intersection_estimator = IntersectionEstimator()
+        side_estimator = SideEstimator()
+        eos_estimator = EndOfStreetEstimator()
+
+        tlast = time.time()
+        intersection_estimator.tlast = tlast
+        side_estimator.tlast = tlast
+        eos_estimator.tlast = tlast
+
+        while True:
+            # Read sensor data
+            reading = self.sensors.read()
+
+            # Check for intersection
+            if intersection_estimator.update(reading, 0.2):
+                print("Intersection detected!")
+                self.pull_forward(intersection_estimator)
+                break
+
+            # Estimate which side of the road the robot is on
+            side = side_estimator.update(reading, 0.05)
+            print(f"Road side: {side}")
+            
+            # Check for end of street
+            if eos_estimator.update(reading, side, 0.1):
+                print("End of street detected!")
+                self.stop()
+                break
+
+            if reading == (0, 1, 0):
+                self.drive_system.drive(STRAIGHT)
+            elif reading == (0, 1, 1):
+                self.drive_system.drive(TURN_R)
+            elif reading == (0, 0, 1):
+                self.drive_system.drive(HOOK_R)
+            elif reading == (1, 1, 0):
+                self.drive_system.drive(TURN_L)
+            elif reading == (1, 0, 0):
+                self.drive_system.drive(HOOK_L)
+            elif reading == (0, 0, 0):
+                # When all sensors read 0, use the road side estimator to decide what to do
+                if side == SideEstimator.LEFT:
+                    # If pushed to the left, turn or hook right to get back to center
+                    self.drive_system.drive(HOOK_R)
+                elif side == SideEstimator.RIGHT:
+                    # If pushed to the right, turn or hook left to get back to center
+                    self.drive_system.drive(HOOK_L)
+                else:
+                    # If centered, keep going straight
+                    self.drive_system.drive(STRAIGHT)
+            else:
+                # considering the other 3 cases i.e. 101, 111, and 000
+                self.drive_system.stop()
+    
+    def run_simple_brain(self):
+        # Initialize estimators
+        intersection_estimator = IntersectionEstimator()
+        side_estimator = SideEstimator()
+        eos_estimator = EndOfStreetEstimator()
+
+        tlast = time.time()
+        intersection_estimator.tlast = tlast
+        side_estimator.tlast = tlast
+        eos_estimator.tlast = tlast
+        while True:
+            try:
+                cmd = input("Enter command (s, l, r, q): ").strip().lower()
+            except KeyboardInterupt:
+                self.stop()
+            if cmd == "q":
+                print("Quiting")
+                self.stop()
+            elif cmd == "l":
+                print("Turning left...")
+                # perform left turn
+            elif cmd == "r":
+                print("Turning right...")
+                # perform right turn
+            elif cmd == "s":
+                print("Going Straight")
+                # go straght
+                while True:
+                    reading = self.sensors.read()
+                    # Check for intersection
+                    if intersection_estimator.update(reading, 0.2):
+                        print("Intersection detected!")
+                        self.pull_forward(intersection_estimator)
+                        break
+
+                    # Estimate which side of the road the robot is on
+                    side = side_estimator.update(reading, 0.05)
+                    print(f"Road side: {side}")
+                    
+                    # Check for end of street
+                    if eos_estimator.update(reading, side, 0.1):
+                        print("End of street detected!")
+                        self.stop()
+                        break
+
+                    if reading == (0, 1, 0):
+                        self.drive_system.drive(STRAIGHT)
+                    elif reading == (0, 1, 1):
+                        self.drive_system.drive(TURN_R)
+                    elif reading == (0, 0, 1):
+                        self.drive_system.drive(HOOK_R)
+                    elif reading == (1, 1, 0):
+                        self.drive_system.drive(TURN_L)
+                    elif reading == (1, 0, 0):
+                        self.drive_system.drive(HOOK_L)
+                    elif reading == (0, 0, 0):
+                        # When all sensors read 0, use the road side estimator to decide what to do
+                        if side == SideEstimator.LEFT:
+                            # If pushed to the left, turn or hook right to get back to center
+                            self.drive_system.drive(HOOK_R)
+                        elif side == SideEstimator.RIGHT:
+                            # If pushed to the right, turn or hook left to get back to center
+                            self.drive_system.drive(HOOK_L)
+                        else:
+                            # If centered, keep going straight
+                            self.drive_system.drive(STRAIGHT)
+                    else:
+                        # considering the other 3 cases i.e. 101, 111, and 000
+                        self.drive_system.stop()
+            else:
+                break
+
+    def stop(self):
+        """Safely stop all motors and clean up the pigpio connection"""
+        try:
+            # First stop the motors through the drive system
+            self.drive_system.stop()
+        except Exception as e:
+            print(f"Error stopping drive system: {e}")
+        
+        try:
+            # Then cleanly stop the pigpio interface if still connected
+            if hasattr(self.io, 'connected') and self.io.connected:
+                self.io.stop()
+        except Exception as e:
+            print(f"Error stopping pigpio: {e}")
+
+# def main_complex():
+#     """
+#     Initializes the io, and robot object to perform the more complex path 
+#     following task (goals 2, task 5.1)
+#     """
+#     # Initialize the pigpio interface
+#     io = pigpio.pi()
+#     if not io.connected:
+#         print("Failed to connect to pigpio daemon. Is it running?")
+#         return
+
+#     robot = Robot(io)
+
+#     try:
+#         robot.run_complex() 
+
+#     except BaseException as ex:
+#         print("Ending due to exception: %s" % repr(ex))
+#         traceback.print_exc()
+#     finally:
+#         try:
+#             # Shutdown cleanly only if still connected
+#             if io.connected:
+#                 robot.stop()
+#         except:
+#             # If any exception occurs during cleanup, just print it
+#             print("Error during cleanup")
+#             traceback.print_exc()
+
+def main_simple_brain():
+    # Initialize the pigpio interface
+    io = pigpio.pi()
+    if not io.connected:
+        print("Failed to connect to pigpio daemon. Is it running?")
+        return
+    robot = Robot(io)
+    try:
+        print("Spinning... Press Ctrl+C to exit")
+        while True:
+            robot.drive_system.drive(SPIN_R)
+            time.sleep(0.1)  # Small delay to prevent overwhelming CPU
+    except KeyboardInterrupt:
+        print("\nStopping spin...")
+    except BaseException as ex:
+        print("Ending due to exception: %s" % repr(ex))
+        traceback.print_exc()
+    finally:
+        try:
+            # Shutdown cleanly only if still connected
+            if io.connected:
+                robot.stop()
+        except:
+            # If any exception occurs during cleanup, just print it
+            print("Error during cleanup")
+            traceback.print_exc()
+    
+if __name__ == "__main__":
+    main_simple_brain()
