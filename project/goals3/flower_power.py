@@ -1,10 +1,8 @@
 from drive_system import DriveSystem
 from motor import Motor
-
 import pigpio
-import traceback
 import time
-from config import *
+from config import PIN_MOTOR1_LEGA, PIN_MOTOR1_LEGB, PIN_MOTOR2_LEGA, PIN_MOTOR2_LEGB
 
 #####################
 # Flower Power Test #
@@ -14,7 +12,7 @@ io = pigpio.pi()
 motor1 = Motor(PIN_MOTOR1_LEGA, PIN_MOTOR1_LEGB, io, 1000)
 motor2 = Motor(PIN_MOTOR2_LEGB, PIN_MOTOR2_LEGA, io, 1000)
 
-ds = DriveSystem(io, motor1, motor2) 
+ds = DriveSystem(io, motor1, motor2)
 
 for style in ds.DRIVE_STYLES:
     ds.drive(style)

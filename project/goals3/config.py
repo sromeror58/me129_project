@@ -3,9 +3,9 @@ PIN_MOTOR1_LEGB = 7
 PIN_MOTOR2_LEGA = 5
 PIN_MOTOR2_LEGB = 6
 
-PIN_IR_LEFT   = 14      # Default GPIO Channel for Left   IR Detector
-PIN_IR_MIDDLE = 15      # Default GPIO Channel for Middle IR Detector
-PIN_IR_RIGHT  = 18      # Default GPIO Channel for Right  IR Detector
+PIN_IR_LEFT = 14  # Default GPIO Channel for Left   IR Detector
+PIN_IR_MIDDLE = 15  # Default GPIO Channel for Middle IR Detector
+PIN_IR_RIGHT = 18  # Default GPIO Channel for Right  IR Detector
 
 STRAIGHT = "STRAIGHT"
 VEER_L = "VEER_L"

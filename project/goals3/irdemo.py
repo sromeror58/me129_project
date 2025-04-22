@@ -10,16 +10,14 @@
 # Imports
 import pigpio
 import sys
-import time
 import traceback
-from config import *
+from config import PIN_IR_LEFT, PIN_IR_MIDDLE, PIN_IR_RIGHT
 
 
 #
 #   Main
 #
 if __name__ == "__main__":
-
     ############################################################
     # Prepare the GPIO interface/connection (to command the motors).
     print("Setting up the GPIO...")
@@ -30,12 +28,11 @@ if __name__ == "__main__":
     print("GPIO ready...")
 
     # Set up the IR pins as input (reading the sensor).
-    io.set_mode(PIN_IR_LEFT,   pigpio.INPUT)
+    io.set_mode(PIN_IR_LEFT, pigpio.INPUT)
     io.set_mode(PIN_IR_MIDDLE, pigpio.INPUT)
-    io.set_mode(PIN_IR_RIGHT,  pigpio.INPUT)
+    io.set_mode(PIN_IR_RIGHT, pigpio.INPUT)
 
     print("Sensors ready...")
-
 
     ############################################################
     # Read.
@@ -46,14 +43,13 @@ if __name__ == "__main__":
             irl = io.read(PIN_IR_LEFT)
             irm = io.read(PIN_IR_MIDDLE)
             irr = io.read(PIN_IR_RIGHT)
-        
+
             print("IRs: L %d  M %d  R %d" % (irl, irm, irr))
 
     except BaseException as ex:
         # Report the error, then continue with the normal shutdown.
         print("Ending due to exception: %s" % repr(ex))
         traceback.print_exc()
-
 
     ############################################################
     # Turn Off.

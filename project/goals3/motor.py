@@ -1,9 +1,10 @@
 import pigpio
 import traceback
 import time
-from config import *
+from config import PIN_MOTOR1_LEGA, PIN_MOTOR1_LEGB, PIN_MOTOR2_LEGA, PIN_MOTOR2_LEGB
 
-class Motor():
+
+class Motor:
     """
     Motor controller using PWM through GPIO pins.
     """
@@ -11,10 +12,10 @@ class Motor():
     def __init__(self, pin_a: int, pin_b: int, io: pigpio.pi, pwm_frequency: int):
         """
         Initialize a new motor controller.
-        
+
         Args:
             pin_a (int): GPIO pin number for motor leg A
-            pin_b (int): GPIO pin number for motor leg B  
+            pin_b (int): GPIO pin number for motor leg B
             io (pigpio.pi): pigpio interface instance
             pwm_frequency (int): PWM frequency in Hz
         """
@@ -46,7 +47,7 @@ class Motor():
     def setlevel(self, level):
         """
         Set the motor speed and direction.
-        
+
         Args:
             level (float): Motor power level from -1.0 to 1.0.
                          Negative values spin backwards, positive forwards.
@@ -61,7 +62,6 @@ class Motor():
 
 if __name__ == "__main__":
     try:
-
         io = pigpio.pi()
         motor1 = Motor(PIN_MOTOR1_LEGA, PIN_MOTOR1_LEGB, io, 1000)
         motor2 = Motor(PIN_MOTOR2_LEGB, PIN_MOTOR2_LEGA, io, 1000)
@@ -87,7 +87,7 @@ if __name__ == "__main__":
             for i in range(4):
                 meter_drive(1, 2.4)
                 time.sleep(1.0)
-                right_turn(0.8, .59)
+                right_turn(0.8, 0.59)
                 time.sleep(1.0)
 
         # meter_drive(0.9, 0.878, 2.6)
@@ -105,4 +105,3 @@ if __name__ == "__main__":
     except BaseException as e:
         print("Ending due to exception: %s" % repr(e))
         traceback.print_exc()
-        
