@@ -1,7 +1,5 @@
 # Imports
 import pigpio
-import sys
-import time
 import traceback
 from drive_system import DriveSystem
 from sensor import LineSensor
@@ -13,9 +11,9 @@ PIN_MOTOR2_LEGA = 5
 PIN_MOTOR2_LEGB = 6
 
 # Define the IR pins.
-PIN_IR_LEFT   = 14      # Default GPIO Channel for Left   IR Detector
-PIN_IR_MIDDLE = 15      # Default GPIO Channel for Middle IR Detector
-PIN_IR_RIGHT  = 18      # Default GPIO Channel for Right  IR Detector
+PIN_IR_LEFT = 14  # Default GPIO Channel for Left   IR Detector
+PIN_IR_MIDDLE = 15  # Default GPIO Channel for Middle IR Detector
+PIN_IR_RIGHT = 18  # Default GPIO Channel for Right  IR Detector
 
 STRAIGHT = "STRAIGHT"
 VEER_L = "VEER_L"
@@ -29,12 +27,12 @@ HOOK_R = "HOOK_R"
 SPIN_L = "SPIN_L"
 
 
-
-class Robot():
+class Robot:
     """
-    Class that encapsulates all the robot components such as the drive system 
+    Class that encapsulates all the robot components such as the drive system
     and sensors.
     """
+
     def __init__(self, io):
         """Initializes the motors, drive system and sensors.
 
@@ -46,7 +44,7 @@ class Robot():
         motor2 = Motor(PIN_MOTOR2_LEGB, PIN_MOTOR2_LEGA, io, 1000)
         self.drive_system = DriveSystem(io, motor1, motor2)
         self.sensors = LineSensor(io, PIN_IR_LEFT, PIN_IR_MIDDLE, PIN_IR_RIGHT)
-    
+
     def run_basic(self):
         """
         This runs the most basic path following task (goals 2, task 4)
@@ -66,9 +64,10 @@ class Robot():
             else:
                 # considering the other 3 cases i.e. 101, 111, and 000
                 self.drive_system.stop()
+
     def run_complex(self):
         """
-        This runs a more complex path following task with the turn 
+        This runs a more complex path following task with the turn
         around aspect incorporated (goals 2, task 5.1)
         """
         while True:
@@ -88,6 +87,7 @@ class Robot():
             else:
                 # considering the other 3 cases i.e. 101, 111, and 000
                 self.drive_system.stop()
+
     def stop(self):
         self.drive_system.stop()
         self.io.set_PWM_dutycycle(PIN_MOTOR1_LEGA, 0)
@@ -95,6 +95,7 @@ class Robot():
         self.io.set_PWM_dutycycle(PIN_MOTOR2_LEGA, 0)
         self.io.set_PWM_dutycycle(PIN_MOTOR2_LEGB, 0)
         self.io.stop()
+
 
 def main_basic():
     """
@@ -105,7 +106,7 @@ def main_basic():
     robot = Robot(io)
     try:
         robot.run_basic()
-    except:
+    except Exception as ex:
         # Report the error, then continue with the normal shutdown.
         print("Ending due to exception: %s" % repr(ex))
         traceback.print_exc()
@@ -113,19 +114,20 @@ def main_basic():
     robot.drive_system.drive.stop()
     robot.io.stop()
 
+
 def main_complex():
     """
-    Initializes the io, and robot object to perform the more complex path 
+    Initializes the io, and robot object to perform the more complex path
     following task (goals 2, task 5.1)
     """
     io = pigpio.pi()
     robot = Robot(io)
     try:
-        robot.run_complex() 
+        robot.run_complex()
     except KeyboardInterrupt:
         print("\nKeyboardInterrupt received. Shutting down robot.")
         robot.stop()
-    except:
+    except Exception as ex:
         # Report the error, then continue with the normal shutdown.
         print("Ending due to exception: %s" % repr(ex))
         traceback.print_exc()

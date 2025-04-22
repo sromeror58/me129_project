@@ -25,7 +25,6 @@ PIN_MOTOR2_LEGB = 6
 #   Main
 #
 if __name__ == "__main__":
-
     ############################################################
     # Prepare the GPIO interface/connection (to command the motors).
     print("Setting up the GPIO...")
@@ -47,7 +46,7 @@ if __name__ == "__main__":
     io.set_PWM_range(PIN_MOTOR1_LEGB, 255)
     io.set_PWM_range(PIN_MOTOR2_LEGA, 255)
     io.set_PWM_range(PIN_MOTOR2_LEGB, 255)
-    
+
     # Set the PWM frequency to 1000Hz.
     io.set_PWM_frequency(PIN_MOTOR1_LEGA, 1000)
     io.set_PWM_frequency(PIN_MOTOR1_LEGB, 1000)
@@ -62,20 +61,20 @@ if __name__ == "__main__":
 
     print("Motors ready...")
 
-    
     ############################################################
     # Drive.
     # Place this is a try-except structure, so we can turn off the
     # motors even if the code crashes.
     try:
         # Example 1: Ramp ONE PIN up/down.  Keep the other pin at zero.
-        print("Ramping Motor 2 (backward) up/down...") 
+        print("Ramping Motor 2 (backward) up/down...")
         pinNonzero = PIN_MOTOR2_LEGB
-        pinZero    = PIN_MOTOR2_LEGA
+        pinZero = PIN_MOTOR2_LEGA
 
         for pwmlevel in [50, 100, 150, 200, 255, 200, 150, 100, 50, 0]:
-            print("Pin %d at level %3d, Pin %d at zero" %
-                  (pinNonzero, pwmlevel, pinZero))
+            print(
+                "Pin %d at level %3d, Pin %d at zero" % (pinNonzero, pwmlevel, pinZero)
+            )
             io.set_PWM_dutycycle(pinNonzero, pwmlevel)
             io.set_PWM_dutycycle(pinZero, 0)
             time.sleep(1)
@@ -83,26 +82,25 @@ if __name__ == "__main__":
         # Example 2: Drive ONE motor forward/backward.
         print("Driving Motor 1 forward, stopping, then reversing...")
         io.set_PWM_dutycycle(PIN_MOTOR1_LEGA, 170)
-        io.set_PWM_dutycycle(PIN_MOTOR1_LEGB,   0)
+        io.set_PWM_dutycycle(PIN_MOTOR1_LEGB, 0)
         time.sleep(1)
 
-        io.set_PWM_dutycycle(PIN_MOTOR1_LEGA,   0)
-        io.set_PWM_dutycycle(PIN_MOTOR1_LEGB,   0)
+        io.set_PWM_dutycycle(PIN_MOTOR1_LEGA, 0)
+        io.set_PWM_dutycycle(PIN_MOTOR1_LEGB, 0)
         time.sleep(1)
 
-        io.set_PWM_dutycycle(PIN_MOTOR1_LEGA,   0)
+        io.set_PWM_dutycycle(PIN_MOTOR1_LEGA, 0)
         io.set_PWM_dutycycle(PIN_MOTOR1_LEGB, 170)
         time.sleep(1)
 
-        io.set_PWM_dutycycle(PIN_MOTOR1_LEGA,   0)
-        io.set_PWM_dutycycle(PIN_MOTOR1_LEGB,   0)
+        io.set_PWM_dutycycle(PIN_MOTOR1_LEGA, 0)
+        io.set_PWM_dutycycle(PIN_MOTOR1_LEGB, 0)
         time.sleep(1)
 
     except BaseException as ex:
         # Report the error, but continue with the normal shutdown.
         print("Ending due to exception: %s" % repr(ex))
         traceback.print_exc()
-        
 
     ############################################################
     # Turn Off.
@@ -116,6 +114,6 @@ if __name__ == "__main__":
     io.set_PWM_dutycycle(PIN_MOTOR1_LEGB, 0)
     io.set_PWM_dutycycle(PIN_MOTOR2_LEGA, 0)
     io.set_PWM_dutycycle(PIN_MOTOR2_LEGB, 0)
-    
+
     # Also stop the interface.
     io.stop()

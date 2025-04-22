@@ -3,14 +3,16 @@ import traceback
 import time
 from motor import Motor
 
-class DriveValues():
+
+class DriveValues:
     """
     Stores motor power levels for both motors in a drive system.
     """
+
     def __init__(self, level1: float, level2: float):
         """
         Initialize with power levels for both motors.
-        
+
         Args:
             level1 (float): Power level for motor 1 (-1.0 to 1.0)
             level2 (float): Power level for motor 2 (-1.0 to 1.0)
@@ -18,35 +20,34 @@ class DriveValues():
         self.level1 = level1
         self.level2 = level2
 
-class DriveSystem():
+
+class DriveSystem:
     """
     Controls a two-motor drive system with predefined driving styles.
-    
+
     Provides methods to drive the robot in various patterns including
     straight, veering, turning, and spinning in both directions.
     """
 
     # Predefined motor power levels for different driving styles
     DRIVE_STYLES = {
-        "STRAIGHT": (0.76, 0.719),  
-
-        "VEER_L": (0.73, 0.77),     
-        "STEER_L": (0.62, 0.77),    
-        "TURN_L": (0.47, 0.79),     
-        "HOOK_L": (0.0, 0.8),       
-        "SPIN_L": (-0.7, 0.65),     
-
-        "VEER_R": (0.79, 0.67),     
-        "STEER_R": (0.79, 0.60),    
-        "TURN_R": (0.82, 0.45),     
-        "HOOK_R": (0.83, 0),        
-        "SPIN_R": (0.71, -0.69),    
+        "STRAIGHT": (0.76, 0.719),
+        "VEER_L": (0.73, 0.77),
+        "STEER_L": (0.62, 0.77),
+        "TURN_L": (0.47, 0.79),
+        "HOOK_L": (0.0, 0.8),
+        "SPIN_L": (-0.7, 0.65),
+        "VEER_R": (0.79, 0.67),
+        "STEER_R": (0.79, 0.60),
+        "TURN_R": (0.82, 0.45),
+        "HOOK_R": (0.83, 0),
+        "SPIN_R": (0.71, -0.69),
     }
-    
+
     def __init__(self, io, motor1: Motor, motor2: Motor):
         """
         Initialize the drive system with two motors.
-        
+
         Args:
             io (pigpio.pi): pigpio interface for GPIO control
             motor1 (Motor): First motor object (typically left motor)
@@ -54,7 +55,7 @@ class DriveSystem():
         """
         self.io = io
         self.motor1 = motor1
-        self.motor2 = motor2 
+        self.motor2 = motor2
         # Convert drive style tuples to DriveValues objects
         self.drive_styles = {}
         for style, values in self.DRIVE_STYLES.items():
@@ -68,11 +69,11 @@ class DriveSystem():
     def drive(self, style: str):
         """
         Drive the robot using a predefined driving style.
-        
+
         Args:
             style (str): Name of the driving style to use
                         (must be one of the keys in DRIVE_STYLES)
-                        
+
         Raises:
             ValueError: If the specified style is not recognized
         """
@@ -81,6 +82,7 @@ class DriveSystem():
         drive_val = self.drive_styles[style]
         self.motor1.setlevel(drive_val.level1)
         self.motor2.setlevel(drive_val.level2)
+
 
 if __name__ == "__main__":
     # Testing different drive modes
@@ -97,7 +99,7 @@ if __name__ == "__main__":
         motor2 = Motor(PIN_MOTOR2_LEGB, PIN_MOTOR2_LEGA, io, 1000)
 
         # Create drive system and test a drive style
-        ds = DriveSystem(io, motor1, motor2) 
+        ds = DriveSystem(io, motor1, motor2)
         ds.drive("SPIN_R")
         time.sleep(4)
         ds.stop()
@@ -113,5 +115,3 @@ if __name__ == "__main__":
     except BaseException as e:
         print("Ending due to exception: %s" % repr(e))
         traceback.print_exc()
-        
-
