@@ -1,11 +1,7 @@
 import pigpio
 import sys
 import traceback
-
-# Define the IR pins.
-PIN_IR_LEFT = 14  # Default GPIO Channel for Left   IR Detector
-PIN_IR_MIDDLE = 15  # Default GPIO Channel for Middle IR Detector
-PIN_IR_RIGHT = 18  # Default GPIO Channel for Right  IR Detector
+from config import PIN_IR_LEFT, PIN_IR_MIDDLE, PIN_IR_RIGHT
 
 
 class IR:

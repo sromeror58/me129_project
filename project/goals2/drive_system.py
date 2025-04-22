@@ -2,6 +2,13 @@ import pigpio
 import traceback
 import time
 from motor import Motor
+from config import (
+    PIN_MOTOR1_LEGA,
+    PIN_MOTOR1_LEGB,
+    PIN_MOTOR2_LEGA,
+    PIN_MOTOR2_LEGB,
+    SPIN_R,
+)
 
 
 class DriveValues:
@@ -87,12 +94,6 @@ class DriveSystem:
 if __name__ == "__main__":
     # Testing different drive modes
     try:
-        # GPIO pin definitions for motors
-        PIN_MOTOR1_LEGA = 8
-        PIN_MOTOR1_LEGB = 7
-        PIN_MOTOR2_LEGA = 5
-        PIN_MOTOR2_LEGB = 6
-
         # Initialize pigpio and motors
         io = pigpio.pi()
         motor1 = Motor(PIN_MOTOR1_LEGA, PIN_MOTOR1_LEGB, io, 1000)
@@ -100,7 +101,7 @@ if __name__ == "__main__":
 
         # Create drive system and test a drive style
         ds = DriveSystem(io, motor1, motor2)
-        ds.drive("SPIN_R")
+        ds.drive(SPIN_R)
         time.sleep(4)
         ds.stop()
 

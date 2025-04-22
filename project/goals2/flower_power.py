@@ -1,5 +1,6 @@
 from drive_system import DriveSystem
 from motor import Motor
+from config import PIN_MOTOR1_LEGA, PIN_MOTOR1_LEGB, PIN_MOTOR2_LEGA, PIN_MOTOR2_LEGB
 
 import pigpio
 import time
@@ -7,11 +8,6 @@ import time
 #####################
 # Flower Power Test #
 #####################
-
-PIN_MOTOR1_LEGA = 8
-PIN_MOTOR1_LEGB = 7
-PIN_MOTOR2_LEGA = 5
-PIN_MOTOR2_LEGB = 6
 
 io = pigpio.pi()
 motor1 = Motor(PIN_MOTOR1_LEGA, PIN_MOTOR1_LEGB, io, 1000)

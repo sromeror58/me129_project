@@ -4,27 +4,21 @@ import traceback
 from drive_system import DriveSystem
 from sensor import LineSensor
 from motor import Motor
-
-PIN_MOTOR1_LEGA = 8
-PIN_MOTOR1_LEGB = 7
-PIN_MOTOR2_LEGA = 5
-PIN_MOTOR2_LEGB = 6
-
-# Define the IR pins.
-PIN_IR_LEFT = 14  # Default GPIO Channel for Left   IR Detector
-PIN_IR_MIDDLE = 15  # Default GPIO Channel for Middle IR Detector
-PIN_IR_RIGHT = 18  # Default GPIO Channel for Right  IR Detector
-
-STRAIGHT = "STRAIGHT"
-VEER_L = "VEER_L"
-STEER_L = "STEER_L"
-VEER_R = "VEER_R"
-STEER_R = "STEER_R"
-TURN_L = "TURN_L"
-HOOK_L = "HOOK_L"
-TURN_R = "TURN_R"
-HOOK_R = "HOOK_R"
-SPIN_L = "SPIN_L"
+from config import (
+    PIN_MOTOR1_LEGA,
+    PIN_MOTOR1_LEGB,
+    PIN_MOTOR2_LEGA,
+    PIN_MOTOR2_LEGB,
+    PIN_IR_LEFT,
+    PIN_IR_MIDDLE,
+    PIN_IR_RIGHT,
+    STRAIGHT,
+    TURN_R,
+    HOOK_R,
+    TURN_L,
+    HOOK_L,
+    SPIN_L,
+)
 
 
 class Robot:

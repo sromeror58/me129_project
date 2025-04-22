@@ -1,6 +1,7 @@
 import pigpio
 import traceback
 import time
+from config import PIN_MOTOR1_LEGA, PIN_MOTOR1_LEGB, PIN_MOTOR2_LEGA, PIN_MOTOR2_LEGB
 
 
 class Motor:
@@ -61,11 +62,6 @@ class Motor:
 
 if __name__ == "__main__":
     try:
-        PIN_MOTOR1_LEGA = 8
-        PIN_MOTOR1_LEGB = 7
-        PIN_MOTOR2_LEGA = 5
-        PIN_MOTOR2_LEGB = 6
-
         io = pigpio.pi()
         motor1 = Motor(PIN_MOTOR1_LEGA, PIN_MOTOR1_LEGB, io, 1000)
         motor2 = Motor(PIN_MOTOR2_LEGB, PIN_MOTOR2_LEGA, io, 1000)
