@@ -102,32 +102,20 @@ class Robot:
 
         self.drive_system.stop()
 
-    def run_complex(self):
+    def line_follow(self, intersection_estimator, side_estimator, eos_estimator):
+        """Performs the line following behavior.
+
+        Args:
+            intersection_estimator (IntersectionEstimator): IntersectionEstimator object
+            side_estimator (SideEstimator): SideEstimator object
+            eos_estimator (EndOfStreetEstimator): EndOfStreetEstimator object
         """
-        This runs a more complex path following task with the turn
-        around aspect incorporated (goals 2, task 5.1)
-        """
-
-        # Initialize estimators
-        intersection_estimator = IntersectionEstimator()
-        side_estimator = SideEstimator()
-        eos_estimator = EndOfStreetEstimator()
-
-        tlast = time.time()
-        intersection_estimator.tlast = tlast
-        side_estimator.tlast = tlast
-        eos_estimator.tlast = tlast
-
         while True:
-            # Read sensor data
             reading = self.sensors.read()
-
             # Check for intersection
             if intersection_estimator.update(reading, 0.2):
                 print("Intersection detected!")
                 self.pull_forward(intersection_estimator)
-                # Now turn to find the next street (default: left turn)
-                self.turn_to_next_street("right")
                 break
 
             # Estimate which side of the road the robot is on
@@ -137,7 +125,7 @@ class Robot:
             # Check for end of street
             if eos_estimator.update(reading, side, 0.1):
                 print("End of street detected!")
-                # self.stop()
+                self.drive_system.stop()
                 break
 
             if reading == (0, 1, 0):
@@ -202,49 +190,7 @@ class Robot:
             elif cmd == "s":
                 print("Going Straight")
                 # go straght
-                while True:
-                    reading = self.sensors.read()
-                    # Check for intersection
-                    if intersection_estimator.update(reading, 0.2):
-                        print("Intersection detected!")
-                        self.pull_forward(intersection_estimator)
-                        break
-
-                    # Estimate which side of the road the robot is on
-                    side = side_estimator.update(reading, 0.05)
-                    print(f"Road side: {side}")
-
-                    # Check for end of street
-                    if eos_estimator.update(reading, side, 0.1):
-                        print("End of street detected!")
-                        self.drive_system.stop()
-                        # self.stop()
-                        break
-
-                    if reading == (0, 1, 0):
-                        self.drive_system.drive(STRAIGHT)
-                    elif reading == (0, 1, 1):
-                        self.drive_system.drive(TURN_R)
-                    elif reading == (0, 0, 1):
-                        self.drive_system.drive(HOOK_R)
-                    elif reading == (1, 1, 0):
-                        self.drive_system.drive(TURN_L)
-                    elif reading == (1, 0, 0):
-                        self.drive_system.drive(HOOK_L)
-                    elif reading == (0, 0, 0):
-                        # When all sensors read 0, use the road side estimator to decide what to do
-                        if side == SideEstimator.LEFT:
-                            # If pushed to the left, turn or hook right to get back to center
-                            self.drive_system.drive(HOOK_R)
-                        elif side == SideEstimator.RIGHT:
-                            # If pushed to the right, turn or hook left to get back to center
-                            self.drive_system.drive(HOOK_L)
-                        else:
-                            # If centered, keep going straight
-                            self.drive_system.drive(STRAIGHT)
-                    else:
-                        # considering the other 3 cases i.e. 101, 111, and 000
-                        self.drive_system.stop()
+                self.line_follow(intersection_estimator, side_estimator, eos_estimator)
             else:
                 print("Invalid command, quitting...")
                 self.stop()
