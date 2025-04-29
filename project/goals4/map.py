@@ -1,7 +1,8 @@
 from enum import Enum
 from pose import Pose
 import matplotlib
-matplotlib.use('TkAgg') 
+# matplotlib.use('TkAgg') 
+matplotlib.use('Agg')  
 import matplotlib.pyplot as plt
 import math
 
@@ -100,14 +101,16 @@ class Map:
                     intersection.updateStreet(h, STATUS.NONEXISTENT)
 
         intersection.updateStreet(h1, STATUS.UNEXPLORED)
-        # self.plot(pose1)
+        # Updated to use save_plot instead of direct plotting
+        # self.save_plot(x1, y1, h1)
 
     def outcomeB(self, x0, y0, h0, x1, y1, h1):
         intersection = self.getintersection(x0, y0)
         intersection.streets[h0] = STATUS.CONNECTED
         intersection = self.getintersection(x1, y1)
         intersection.streets[(h1 + 4) % 8] = STATUS.CONNECTED
-        # self.plot(pose1)
+        # Updated to use save_plot instead of direct plotting
+        # self.save_plot(x1, y1, h1)
 
     def outcomeC(self, x0, y0, h0, x1, y1, h1):
         intersection = self.getintersection(x0, y0)
@@ -118,11 +121,12 @@ class Map:
             for i in range(0, 8):
                 if i != h0:
                     intersection.streets[i] = STATUS.NONEXISTENT
-        # self.plot(pose1)
+        # Updated to use save_plot instead of direct plotting
+        # self.save_plot(x1, y1, h1)
 
     def plot(self, x, y, heading):
         """
-        Show the x/y/heading of the current robot pose.
+        Create a plot showing the x/y/heading of the current robot pose.
         
         Args:
             x (float): X coordinate
@@ -137,9 +141,9 @@ class Map:
         plt.gca().set_ylim(-3.5, 3.5)
         plt.gca().set_aspect('equal')
         # Show all the possible locations.
-        for x in range(-3, 4):
-            for y in range(-3, 4):
-                plt.plot(x, y, color='lightgray', marker='o', markersize=8)
+        for x_grid in range(-3, 4):
+            for y_grid in range(-3, 4):
+                plt.plot(x_grid, y_grid, color='lightgray', marker='o', markersize=8)
         # Get the direction vector for the current heading
         dx, dy = self.dx_dy_table[heading]
         
@@ -174,7 +178,7 @@ class Map:
         }
 
         # For each intersection in the map
-        for (x,y) in self.intersections:
+        for (x_int, y_int) in self.intersections:
             # For each possible heading from that intersection
             for h in range(8):
                 # Get the direction vector for this heading
@@ -186,10 +190,25 @@ class Map:
                 dy *= length
                 
                 # Get intersection status and corresponding color
-                status = self.getintersection(x,y).streets[h]
+                status = self.getintersection(x_int, y_int).streets[h]
                 color = status_colors[status]
                 
                 # Draw line from intersection halfway to next
-                plt.plot([x, x + dx], [y, y + dy], color=color)
+                plt.plot([x_int, x_int + dx], [y_int, y_int + dy], color=color)
 
-        plt.pause(0.001)
+    def save_plot(self, x, y, heading):
+        """
+        Create the plot and save it to a file instead of displaying it.
+        
+        Args:
+            x (float): X coordinate
+            y (float): Y coordinate
+            heading (int): Heading (0-7)
+        """
+        self.plot(x, y, heading)
+        
+        # Instead of plt.pause(), save the figure to a file
+        filename = f"map_x{x}_y{y}_h{heading}.png"
+        plt.savefig(filename)
+        print(f"Saved map to {filename}")
+        plt.close()  # Close the figure to free memory

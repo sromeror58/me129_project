@@ -65,8 +65,10 @@ class IntersectionEstimator(SensorEstimator):
             initial_state (bool): Initial state of the detector
             threshold (float): Threshold for state changes (default 0.63, ~one time constant)
         """
-        super().__init__(initial_level, threshold)
         self.state = initial_state
+        self.level = initial_level
+        self.threshold = threshold
+        self.tlast = time.time()
 
     def update(self, ir_readings, time_constant=0.5):
         """
@@ -82,8 +84,14 @@ class IntersectionEstimator(SensorEstimator):
         # Raw guess: 1.0 if all sensors detect the line, 0.0 otherwise
         raw_value = 1.0 if all(ir_readings) else 0.0
 
-        # Update the detector level
-        self.update_level(raw_value, time_constant)
+        # Update the detector level - get current time and calculate time step
+        tnow = time.time()
+        dt = tnow - self.tlast
+        self.tlast = tnow
+
+        # Running average calculation
+        self.level = self.level + dt / time_constant * (raw_value - self.level)
+        print(self.level)
 
         # Threshold with hysteresis
         if self.level > self.threshold:
@@ -101,7 +109,7 @@ class IntersectionEstimator(SensorEstimator):
             level (float): Initial level value
             state (bool): Initial state value
         """
-        super().reset(level)
+        self.level = level
         self.state = state
 
 

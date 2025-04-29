@@ -74,9 +74,6 @@ class Behaviors:
         Args:
             threshold (float): Threshold for state changes (default 0.5, ~one time constant)
         """
-        # Stop immediately when starting pull forward
-        self.drive_system.stop()
-        
         t_0 = time.time()
         curr = time.time()
         while curr - t_0 <= threshold:
@@ -91,19 +88,16 @@ class Behaviors:
         intersection_estimator = IntersectionEstimator()
         side_estimator = SideEstimator()
         eos_estimator = EndOfStreetEstimator()
+        
         t0 = time.time()
-
         while True:
             reading = self.sensors.read()
+
             # Check for intersection
-            if intersection_estimator.update(reading, 2.5): 
+            if intersection_estimator.update(reading, 0.1):
                 curr = time.time()
-                print(curr-t0)
-                print("Intersection detected!")
-                # Stop immediately when intersection is detected
-                self.drive_system.stop()
                 # Then pull forward
-                self.pull_forward()
+                self.pull_forward(threshold=0.55)
 
                 # isUturn, travel time
                 return False, curr - t0
@@ -124,6 +118,8 @@ class Behaviors:
                 return True, curr - t0
 
             if reading == (0, 1, 0):
+                self.drive_system.drive(STRAIGHT)
+            elif reading == (1, 1, 1):
                 self.drive_system.drive(STRAIGHT)
             elif reading == (0, 1, 1):
                 self.drive_system.drive(TURN_R)
