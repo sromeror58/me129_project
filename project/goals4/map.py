@@ -20,6 +20,12 @@ class Intersection:
         self.y = y
         self.streets = [STATUS.UNKNOWN] * 8
 
+    def updateStreet(self, heading, status):
+        if self.streets[heading] != STATUS.NONEXISTENT:
+            return
+        self.streets[heading] = status
+
+
 class Map:
     def __init__(self):
         self.intersections = {}
@@ -39,6 +45,7 @@ class Map:
             self.intersections[(x, y)] = Intersection(x, y)
         return self.intersections[(x, y)] 
 
+
     def outcomeA(self, x, y, heading1, heading2, isLeft: bool):
         """
         Set streets to STATUS.NONEXISTENT based on the direction of turn from heading1 to heading2.
@@ -56,17 +63,17 @@ class Map:
             # Left turn
             if heading1 < heading2:
                 for h in range(heading1 + 1, heading2):
-                    intersection.streets[h] = STATUS.NONEXISTENT
+                    intersection.updateStreet[h, STATUS.NONEXISTENT]
             else:  
                 for h in range(heading1 + 1, 8):
-                    intersection.streets[h] = STATUS.NONEXISTENT
+                    intersection.updateStreet[h, STATUS.NONEXISTENT]
                 for h in range(0, heading2):
-                    intersection.streets[h] = STATUS.NONEXISTENT
+                    intersection.updateStreet[h, STATUS.NONEXISTENT]
         else:  
             # Right turn
             if heading2 < heading1:
                 for h in range(heading2 + 1, heading1):
-                    intersection.streets[h] = STATUS.NONEXISTENT
+                    intersection.updateStreet[h, STATUS.NONEXISTENT]
             else:  
                 for h in range(heading2 + 1, 8):
                     intersection.streets[h] = STATUS.NONEXISTENT
@@ -75,8 +82,9 @@ class Map:
 
     def outcomeC(self, h0, x0, y0, x1, y1):
         intersection = self.getintersection(x0, y0)
+        if intersection.streets[h0] == STATUS.DEADEND:
+            return
         intersection.streets[h0] = STATUS.DEADEND
-
         intersection = self.getintersection(x1, y1)
         intersection.streets[(h0 + 4) % 8] = STATUS.CONNECTED
         for i in range(0, 8):
