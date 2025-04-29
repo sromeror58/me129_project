@@ -68,15 +68,15 @@ class Behaviors:
         self.drive_system.stop()
         return angle1, angle2
     
-    def pull_forward(self, threshold=0.7):
+    def pull_forward(self, travel_time=0.5):
         """Performs the pull forward behavior after detecting a valid intersection.
 
         Args:
-            threshold (float): Threshold for state changes (default 0.5, ~one time constant)
+            travel_time (float): Amount of time to pull forward.
         """
         t_0 = time.time()
         curr = time.time()
-        while curr - t_0 <= threshold:
+        while curr - t_0 <= travel_time:
             self.drive_system.drive(STRAIGHT)
             curr = time.time()
         self.drive_system.stop()
@@ -97,7 +97,7 @@ class Behaviors:
             if intersection_estimator.update(reading, 0.1):
                 curr = time.time()
                 # Then pull forward
-                self.pull_forward(threshold=0.55)
+                self.pull_forward(travel_time=0.4)
 
                 # isUturn, travel time
                 return False, curr - t0
@@ -107,7 +107,7 @@ class Behaviors:
             print(f"Road side: {side}")
 
             # Check for end of street
-            if eos_estimator.update(reading, side, 0.75):
+            if eos_estimator.update(reading, side, 0.6):
                 curr = time.time()
                 print("End of street detected!")
                 self.turn_to_next_street("left")

@@ -1,8 +1,12 @@
 from enum import Enum
 from pose import Pose
 import matplotlib
-# matplotlib.use('TkAgg') 
-matplotlib.use('Agg')  
+import os
+# Check if display_map environment variable is set to "on"
+if os.environ.get('display_map') == 'on':
+    matplotlib.use('TkAgg')
+else:
+    matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import math
 from config import DX_DY_TABLE
@@ -26,6 +30,9 @@ class Intersection:
         self.x = x
         self.y = y
         self.streets = [STATUS.UNKNOWN] * 8
+        if os.environ.get('display_map') == 'on':
+            print("HELLO")
+
 
 
     def updateStreet(self, heading, status):
@@ -92,8 +99,7 @@ class Map:
                     intersection.updateStreet(h, STATUS.NONEXISTENT)
 
         intersection.updateStreet(h1, STATUS.UNEXPLORED)
-        # Updated to use save_plot instead of direct plotting
-        # self.save_plot(pose1)
+        self.plot(pose1)
 
     def outcomeB(self, pose0, pose1):
         """
@@ -107,8 +113,7 @@ class Map:
         intersection.streets[pose0.heading] = STATUS.CONNECTED
         intersection = self.getintersection(pose1.x, pose1.y)
         intersection.streets[(pose1.heading + 4) % 8] = STATUS.CONNECTED
-        # Updated to use save_plot instead of direct plotting
-        # self.save_plot(pose1)
+        self.plot(pose1)
 
     def outcomeC(self, pose0, pose1):
         """
@@ -126,8 +131,7 @@ class Map:
             for i in range(0, 8):
                 if i != pose0.heading:
                     intersection.streets[i] = STATUS.NONEXISTENT
-        # Updated to use save_plot instead of direct plotting
-        # self.save_plot(pose1)
+        self.plot(pose1)
 
     def plot(self, pose):
         """
@@ -198,6 +202,11 @@ class Map:
                 
                 # Draw line from intersection halfway to next
                 plt.plot([x_int, x_int + dx], [y_int, y_int + dy], color=color)
+        
+        # If using TkAgg backend, display the plot
+        if os.environ.get('display_map') == 'on':
+            plt.draw()
+            plt.pause(0.1)  # Small pause to allow the plot to update
 
     def save_plot(self, pose):
         """
@@ -209,7 +218,7 @@ class Map:
         self.plot(pose)
         
         # Instead of plt.pause(), save the figure to a file
-        filename = f"map_x{pose.x}_y{pose.y}_h{pose.heading}.png"
+        filename = f"plots/map_x{pose.x}_y{pose.y}_h{pose.heading}.png"
         plt.savefig(filename)
         print(f"Saved map to {filename}")
-        plt.close()  # Close the figure to free memory
+        plt.close()

@@ -1,6 +1,9 @@
 # Imports
 import pigpio
 import traceback
+import os
+import sys
+import argparse
 from drive_system import DriveSystem
 from sensor import LineSensor
 from behaviors import Behaviors
@@ -50,7 +53,7 @@ def simple_brain(behaviors, robot):
 
     while True:
         try:
-            cmd = input("Enter command (s, l, r, q): ").strip().lower()
+            cmd = input("Enter command (s, l, r, q, p): ").strip().lower()
 
         except KeyboardInterrupt:
             robot.stop()
@@ -116,6 +119,16 @@ def simple_brain(behaviors, robot):
             break
 
 def main_simple_brain():
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description='Robot navigation and mapping')
+    parser.add_argument('--display', action='store_true', help='Display map in real-time using TkAgg backend')
+    args = parser.parse_args()
+    
+    # Set environment variable for map display
+    if args.display:
+        os.environ['display_map'] = 'on'
+        print("Display map enabled - using TkAgg backend")
+    
     # Initialize the pigpio interface
     io = pigpio.pi()
     if not io.connected:
