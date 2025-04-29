@@ -44,12 +44,18 @@ class Robot:
             print(f"Error stopping pigpio: {e}")
 
 
-def simple_brain(behaviors, robot):
+def simple_brain(behaviors, robot, map):
+    """
+    Simple brain function that handles robot navigation and mapping.
+    
+    Args:
+        behaviors (Behaviors): Robot behaviors
+        robot (Robot): Robot instance
+        map (Map): Map instance
+    """
 
     pose = Pose()
-    map = Map(pose)
-
-    # map.plot(pose)
+    map.plot(pose)
 
     while True:
         try:
@@ -57,11 +63,13 @@ def simple_brain(behaviors, robot):
 
         except KeyboardInterrupt:
             robot.stop()
+            map.close()  
             break
 
         if cmd == "q":
             print("Quitting...")
             robot.stop()
+            map.close()  
             break
 
         # Save plot
@@ -116,6 +124,7 @@ def simple_brain(behaviors, robot):
         else:
             print("Invalid command, quitting...")
             robot.stop()
+            map.close()  
             break
 
 def main_simple_brain():
@@ -140,14 +149,21 @@ def main_simple_brain():
     adc = ADC(io)
 
     behaviors = Behaviors(drive_system, sensors, adc)
+    map = None
 
     try:
-        simple_brain(behaviors, robot)
+        # Create a map instance and pass it to simple_brain
+        map = Map()
+        simple_brain(behaviors, robot, map)
     except BaseException as ex:
         print("Ending due to exception: %s" % repr(ex))
         traceback.print_exc()
     finally:
         try:
+            # Close matplotlib resources if map was created
+            if map is not None:
+                map.close()
+                
             # Shutdown cleanly only if still connected
             if io.connected:
                 robot.stop()

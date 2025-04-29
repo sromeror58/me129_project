@@ -3,10 +3,6 @@ from pose import Pose
 import matplotlib
 import os
 # Check if display_map environment variable is set to "on"
-if os.environ.get('display_map') == 'on':
-    matplotlib.use('TkAgg')
-else:
-    matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import math
 from config import DX_DY_TABLE
@@ -30,10 +26,11 @@ class Intersection:
         self.x = x
         self.y = y
         self.streets = [STATUS.UNKNOWN] * 8
+            
         if os.environ.get('display_map') == 'on':
-            print("HELLO")
-
-
+            matplotlib.use('TkAgg')
+        else:
+            matplotlib.use('Agg')
 
     def updateStreet(self, heading, status):
         if self.streets[heading] not in [STATUS.UNKNOWN, STATUS.UNEXPLORED]:
@@ -222,3 +219,12 @@ class Map:
         plt.savefig(filename)
         print(f"Saved map to {filename}")
         plt.close()
+        
+    def close(self):
+        """
+        Properly close all matplotlib resources.
+        This should be called when the program exits.
+        """
+        plt.close('all')  # Close all figures
+        if os.environ.get('display_map') == 'on':
+            plt.close()  # Ensure the main figure is closed

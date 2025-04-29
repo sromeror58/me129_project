@@ -97,7 +97,7 @@ class Behaviors:
             if intersection_estimator.update(reading, 0.1):
                 curr = time.time()
                 # Then pull forward
-                self.pull_forward(travel_time=0.4)
+                self.pull_forward(travel_time=0.35)
 
                 # isUturn, travel time
                 return False, curr - t0
@@ -107,7 +107,7 @@ class Behaviors:
             print(f"Road side: {side}")
 
             # Check for end of street
-            if eos_estimator.update(reading, side, 0.6):
+            if eos_estimator.update(reading, side, 0.675):
                 curr = time.time()
                 print("End of street detected!")
                 self.turn_to_next_street("left")
