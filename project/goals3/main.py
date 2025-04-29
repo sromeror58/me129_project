@@ -46,8 +46,8 @@ class Robot:
         motor2 = Motor(PIN_MOTOR2_LEGB, PIN_MOTOR2_LEGA, io, 1000)
         self.drive_system = DriveSystem(io, motor1, motor2)
         self.sensors = LineSensor(io, PIN_IR_LEFT, PIN_IR_MIDDLE, PIN_IR_RIGHT)
-
-    def pull_forward(self, intersection_estimator, threshold=0.5):
+    
+    def pull_forward(self, intersection_estimator, threshold=0.65):
         """Performs the pull forward behavior after detecting a valid intersection.
 
         Args:
@@ -113,7 +113,7 @@ class Robot:
         while True:
             reading = self.sensors.read()
             # Check for intersection
-            if intersection_estimator.update(reading, 0.2):
+            if intersection_estimator.update(reading, 0.7):
                 print("Intersection detected!")
                 self.pull_forward(intersection_estimator)
                 break
