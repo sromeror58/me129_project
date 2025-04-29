@@ -2,23 +2,13 @@ import matplotlib
 matplotlib.use('TkAgg') 
 import matplotlib.pyplot as plt
 import math
+from config import DX_DY_TABLE
 
 class Pose:
     def __init__(self, xinit: float = 0.0, yinit: float = 0.0, heading: int = 0):
         self.x = xinit
         self.y = yinit 
         self.heading = heading  
-
-        self.dx_dy_table = [
-            (0, 1),   # Heading 0: North
-            (-1, 1),  # Heading 1: Northwest
-            (-1, 0),  # Heading 2: West
-            (-1, -1), # Heading 3: Southwest
-            (0, -1),  # Heading 4: South
-            (1, -1),  # Heading 5: Southeast
-            (1, 0),   # Heading 6: East
-            (1, 1)    # Heading 7: Northeast
-        ]
 
     def clone(self):
         """Create a deep copy of this Pose object"""
@@ -28,7 +18,7 @@ class Pose:
         """
         Update x and y for one travel step in the direction of the current heading.
         """
-        dx, dy = self.dx_dy_table[self.heading]
+        dx, dy = DX_DY_TABLE[self.heading]
         self.x += dx
         self.y += dy
         print(f"Position after move: ({self.x}, {self.y}, heading: {self.heading})")

@@ -5,6 +5,7 @@ import matplotlib
 matplotlib.use('Agg')  
 import matplotlib.pyplot as plt
 import math
+from config import DX_DY_TABLE
 
 class STATUS(Enum):
     UNKNOWN = 0
@@ -34,19 +35,11 @@ class Intersection:
 
 
 class Map:
-    def __init__(self, x=0.0, y=0.0, heading=0):
-        self.dx_dy_table = [
-            (0, 1),   # Heading 0: North
-            (-1, 1),  # Heading 1: Northwest
-            (-1, 0),  # Heading 2: West
-            (-1, -1), # Heading 3: Southwest
-            (0, -1),  # Heading 4: South
-            (1, -1),  # Heading 5: Southeast
-            (1, 0),   # Heading 6: East
-            (1, 1)    # Heading 7: Northeast
-        ]
+    def __init__(self, pose=None):
         self.intersections = {}
-        self.getintersection(x, y)
+        if pose is None:
+            pose = Pose()
+        self.getintersection(pose.x, pose.y)
 
     def getintersection(self, x, y):
         """
@@ -64,20 +57,18 @@ class Map:
         return self.intersections[(x, y)] 
 
 
-    def outcomeA(self, x0, y0, h0, x1, y1, h1, isLeft: bool):
+    def outcomeA(self, pose0, pose1, isLeft: bool):
         """
-        Set streets to STATUS.NONEXISTENT based on the direction of turn from h0 to h1.
+        Set streets to STATUS.NONEXISTENT based on the direction of turn from pose0 to pose1.
         
         Args:
-            x0 (float): Starting x coordinate
-            y0 (float): Starting y coordinate
-            h0 (int): Starting heading (0-7)
-            x1 (float): Ending x coordinate
-            y1 (float): Ending y coordinate
-            h1 (int): Ending heading (0-7)
+            pose0 (Pose): Starting pose
+            pose1 (Pose): Ending pose
             isLeft (bool): True if turning left, False if turning right
         """
-        intersection = self.getintersection(x0, y0)
+        intersection = self.getintersection(pose0.x, pose0.y)
+        h0 = pose0.heading
+        h1 = pose1.heading
 
         if isLeft:
             # Left turn
@@ -102,36 +93,48 @@ class Map:
 
         intersection.updateStreet(h1, STATUS.UNEXPLORED)
         # Updated to use save_plot instead of direct plotting
-        # self.save_plot(x1, y1, h1)
+        # self.save_plot(pose1)
 
-    def outcomeB(self, x0, y0, h0, x1, y1, h1):
-        intersection = self.getintersection(x0, y0)
-        intersection.streets[h0] = STATUS.CONNECTED
-        intersection = self.getintersection(x1, y1)
-        intersection.streets[(h1 + 4) % 8] = STATUS.CONNECTED
-        # Updated to use save_plot instead of direct plotting
-        # self.save_plot(x1, y1, h1)
-
-    def outcomeC(self, x0, y0, h0, x1, y1, h1):
-        intersection = self.getintersection(x0, y0)
-        if intersection.streets[h0] != STATUS.DEADEND:
-            intersection.streets[h0] = STATUS.DEADEND
-            intersection = self.getintersection(x1, y1)
-            intersection.streets[(h0 + 4) % 8] = STATUS.CONNECTED
-            for i in range(0, 8):
-                if i != h0:
-                    intersection.streets[i] = STATUS.NONEXISTENT
-        # Updated to use save_plot instead of direct plotting
-        # self.save_plot(x1, y1, h1)
-
-    def plot(self, x, y, heading):
+    def outcomeB(self, pose0, pose1):
         """
-        Create a plot showing the x/y/heading of the current robot pose.
+        Update intersection status for a straight movement from pose0 to pose1.
         
         Args:
-            x (float): X coordinate
-            y (float): Y coordinate
-            heading (int): Heading (0-7)
+            pose0 (Pose): Starting pose
+            pose1 (Pose): Ending pose
+        """
+        intersection = self.getintersection(pose0.x, pose0.y)
+        intersection.streets[pose0.heading] = STATUS.CONNECTED
+        intersection = self.getintersection(pose1.x, pose1.y)
+        intersection.streets[(pose1.heading + 4) % 8] = STATUS.CONNECTED
+        # Updated to use save_plot instead of direct plotting
+        # self.save_plot(pose1)
+
+    def outcomeC(self, pose0, pose1):
+        """
+        Update intersection status for a U-turn from pose0 to pose1.
+        
+        Args:
+            pose0 (Pose): Starting pose
+            pose1 (Pose): Ending pose
+        """
+        intersection = self.getintersection(pose0.x, pose0.y)
+        if intersection.streets[pose0.heading] != STATUS.DEADEND:
+            intersection.streets[pose0.heading] = STATUS.DEADEND
+            intersection = self.getintersection(pose1.x, pose1.y)
+            intersection.streets[(pose0.heading + 4) % 8] = STATUS.CONNECTED
+            for i in range(0, 8):
+                if i != pose0.heading:
+                    intersection.streets[i] = STATUS.NONEXISTENT
+        # Updated to use save_plot instead of direct plotting
+        # self.save_plot(pose1)
+
+    def plot(self, pose):
+        """
+        Create a plot showing the current robot pose.
+        
+        Args:
+            pose (Pose): Current robot pose
         """
         # Clear the current, or create a new figure.
         plt.clf()
@@ -145,7 +148,7 @@ class Map:
             for y_grid in range(-3, 4):
                 plt.plot(x_grid, y_grid, color='lightgray', marker='o', markersize=8)
         # Get the direction vector for the current heading
-        dx, dy = self.dx_dy_table[heading]
+        dx, dy = DX_DY_TABLE[pose.heading]
         
         # Scale the direction vector to length 0.5
         arrow_length = 0.5
@@ -154,10 +157,10 @@ class Map:
         dy *= scale
         
         # Calculate start and end points to center the arrow
-        x_start = x - dx/2  # Start point offset by half the arrow length
-        y_start = y - dy/2
-        x_end = x + dx/2    # End point offset by half the arrow length
-        y_end = y + dy/2
+        x_start = pose.x - dx/2  # Start point offset by half the arrow length
+        y_start = pose.y - dy/2
+        x_end = pose.x + dx/2    # End point offset by half the arrow length
+        y_end = pose.y + dy/2
         
         # Draw the arrow
         plt.arrow(x_start, y_start,          # Start position (base)
@@ -182,7 +185,7 @@ class Map:
             # For each possible heading from that intersection
             for h in range(8):
                 # Get the direction vector for this heading
-                dx, dy = self.dx_dy_table[h]
+                dx, dy = DX_DY_TABLE[h]
                 
                 # Scale to half-length (0.5 for cardinal, ~0.707 for diagonal)
                 length = 0.5 if dx == 0 or dy == 0 else 0.3 * math.sqrt(2)
@@ -196,19 +199,17 @@ class Map:
                 # Draw line from intersection halfway to next
                 plt.plot([x_int, x_int + dx], [y_int, y_int + dy], color=color)
 
-    def save_plot(self, x, y, heading):
+    def save_plot(self, pose):
         """
         Create the plot and save it to a file instead of displaying it.
         
         Args:
-            x (float): X coordinate
-            y (float): Y coordinate
-            heading (int): Heading (0-7)
+            pose (Pose): Current robot pose
         """
-        self.plot(x, y, heading)
+        self.plot(pose)
         
         # Instead of plt.pause(), save the figure to a file
-        filename = f"map_x{x}_y{y}_h{heading}.png"
+        filename = f"map_x{pose.x}_y{pose.y}_h{pose.heading}.png"
         plt.savefig(filename)
         print(f"Saved map to {filename}")
         plt.close()  # Close the figure to free memory
