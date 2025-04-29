@@ -44,7 +44,9 @@ class Robot:
 def simple_brain(behaviors, robot):
 
     pose = Pose()
-    map = Map()
+    map = Map(pose.x, pose.y, pose.heading)
+
+    # map.plot(pose.x, pose.y, pose.heading)
 
     while True:
         try:
@@ -63,36 +65,54 @@ def simple_brain(behaviors, robot):
         elif cmd == "l":
             # perform left turn
             print("Turning left...")
-            heading1 = pose.heading()
+
+            # Store current pose values before turning
+            x0, y0, h0 = pose.x, pose.y, pose.heading
+            
             angle1, angle2 = behaviors.turn_to_next_street("left")
             pose.calcturn(angle1, angle2)
-            heading2 = pose.heading()
-            map.outcomeA(heading1, heading2, True)
+            
+            # Get new pose values after turning
+            x1, y1, h1 = pose.x, pose.y, pose.heading
+
+            map.outcomeA(x0, y0, h0, x1, y1, h1, True)
 
         elif cmd == "r":
             # perform right turn
             print("Turning right...")
-            heading1 = pose.heading()
+
+            # Store current pose values before turning
+            x0, y0, h0 = pose.x, pose.y, pose.heading
+            
             angle1, angle2 = behaviors.turn_to_next_street("right")
             pose.calcturn(angle1, angle2)
-            heading2 = pose.heading()
-            map.outcomeA(pose.x, pose.y, heading1, heading2, False)
+            
+            # Get new pose values after turning
+            x1, y1, h1 = pose.x, pose.y, pose.heading
+
+            map.outcomeA(x0, y0, h0, x1, y1, h1, False)
 
         ## OUTCOME B + C ##
         elif cmd == "s":
             print("Going Straight")
+
+            # Store current pose values before moving
+            x0, y0, h0 = pose.x, pose.y, pose.heading
+            
             isUturn, travel_time = behaviors.line_follow()
 
-            # Outcome C
-            if isUturn:
-                x0 = pose.x
-                y0 = pose.y
-                h0 = pose.heading
-                pose.calcuturn()
-                map.outcomeC(h0, x0, y0, pose.x, pose.y)
             # Outcome B
-            else:
+            if not isUturn:
                 pose.calcmove()
+                # Get new pose values after moving
+                x1, y1, h1 = pose.x, pose.y, pose.heading
+                map.outcomeB(x0, y0, h0, x1, y1, h1)
+            # Outcome C
+            else:
+                pose.calcuturn()
+                # Get new pose values after U-turn
+                x1, y1, h1 = pose.x, pose.y, pose.heading
+                map.outcomeC(x0, y0, h0, x1, y1, h1)
 
 
         else:
