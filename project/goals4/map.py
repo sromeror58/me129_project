@@ -275,7 +275,6 @@ class Map:
         filename = f"plots/map_x{pose.x}_y{pose.y}_h{pose.heading}.png"
         plt.savefig(filename)
         print(f"Saved map to {filename}")
-        plt.close()
 
     def close(self):
         """
