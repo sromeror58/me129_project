@@ -10,24 +10,34 @@ from pose import Pose
 from magnetometer import ADC
 from map import Map
 
+
 class Robot:
     """
     Class that encapsulates all the robot components such as the drive system
     and sensors.
+    
+    This class serves as a high-level interface to control the robot's hardware
+    components, providing methods to initialize and safely shut down the robot.
     """
 
     def __init__(self, io):
-        """Initializes the motors, drive system and sensors.
+        """
+        Initializes the motors, drive system and sensors.
 
         Args:
-            io (pigpio.pi): pigpio interface instance
+            io (pigpio.pi): pigpio interface instance for hardware communication
         """
         self.io = io
         self.drive_system = DriveSystem(io)
         self.sensors = LineSensor(io)
 
     def stop(self):
-        """Safely stop all motors and clean up the pigpio connection"""
+        """
+        Safely stop all motors and clean up the pigpio connection.
+        
+        This method ensures that all motors are stopped and the pigpio interface
+        is properly closed, even if exceptions occur during the shutdown process.
+        """
         try:
             # First stop the motors through the drive system
             self.drive_system.stop()
@@ -46,12 +56,17 @@ def simple_brain(behaviors, robot, map):
     """
     Simple brain function that handles robot navigation and mapping.
     
-    Args:
-        behaviors (Behaviors): Robot behaviors
-        robot (Robot): Robot instance
-        map (Map): Map instance
-    """
+    This function implements a basic control loop that:
+    1. Accepts user commands for robot movement
+    2. Updates the robot's pose based on the commands
+    3. Updates the map based on the robot's movement outcomes
+    4. Visualizes the map and robot's current state
 
+    Args:
+        behaviors (Behaviors): Robot behaviors instance for executing movements
+        robot (Robot): Robot instance for hardware control
+        map (Map): Map instance for tracking explored areas
+    """
     pose = Pose()
     map.plot(pose)
 
@@ -61,13 +76,13 @@ def simple_brain(behaviors, robot, map):
 
         except KeyboardInterrupt:
             robot.stop()
-            map.close()  
+            map.close()
             break
 
         if cmd == "q":
             print("Quitting...")
             robot.stop()
-            map.close()  
+            map.close()
             break
 
         # Save plot
@@ -82,10 +97,10 @@ def simple_brain(behaviors, robot, map):
 
             # Store current pose values before turning
             pose0 = pose.clone()
-            
+
             turnAngle = behaviors.turn_to_next_street("left")
             pose.calcturn(turnAngle, True)
-            
+
             map.outcomeA(pose0, pose, True)
 
         elif cmd == "r":
@@ -94,10 +109,10 @@ def simple_brain(behaviors, robot, map):
 
             # Store current pose values before turning
             pose0 = pose.clone()
-            
+
             turnAngle = behaviors.turn_to_next_street("right")
             pose.calcturn(turnAngle, False)
-            
+
             map.outcomeA(pose0, pose, False)
 
         ## OUTCOME B + C ##
@@ -106,7 +121,7 @@ def simple_brain(behaviors, robot, map):
 
             # Store current pose values before moving
             pose0 = pose.clone()
-            
+
             isUturn, travel_time = behaviors.line_follow()
 
             # Outcome B
@@ -118,22 +133,39 @@ def simple_brain(behaviors, robot, map):
                 pose.calcuturn()
                 map.outcomeC(pose0, pose)
 
-
         else:
             print("Invalid command...")
             continue
 
+
 def main_simple_brain():
-    # Parse command line arguments
-    parser = argparse.ArgumentParser(description='Robot navigation and mapping')
-    parser.add_argument('--display', action='store_true', help='Display map in real-time using TkAgg backend')
-    args = parser.parse_args()
+    """
+    Main entry point for the robot navigation and mapping program.
     
+    This function:
+    1. Parses command line arguments
+    2. Initializes hardware components (pigpio, drive system, sensors)
+    3. Creates a map instance
+    4. Runs the simple_brain control loop
+    5. Handles cleanup and exceptions
+    
+    Command line arguments:
+        --display: Enable real-time map display using TkAgg backend
+    """
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Robot navigation and mapping")
+    parser.add_argument(
+        "--display",
+        action="store_true",
+        help="Display map in real-time using TkAgg backend",
+    )
+    args = parser.parse_args()
+
     # Set environment variable for map display
     if args.display:
-        os.environ['display_map'] = 'on'
+        os.environ["display_map"] = "on"
         print("Display map enabled - using TkAgg backend")
-    
+
     # Initialize the pigpio interface
     io = pigpio.pi()
     if not io.connected:
@@ -161,7 +193,7 @@ def main_simple_brain():
             # Close matplotlib resources if map was created
             if map is not None:
                 map.close()
-                
+
             # Shutdown cleanly only if still connected
             if io.connected:
                 robot.stop()

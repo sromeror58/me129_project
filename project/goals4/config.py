@@ -34,12 +34,12 @@ SPIN_L = "SPIN_L"
 SPIN_R = "SPIN_R"
 
 DX_DY_TABLE = [
-    (0, 1),   # Heading 0: North
+    (0, 1),  # Heading 0: North
     (-1, 1),  # Heading 1: Northwest
     (-1, 0),  # Heading 2: West
-    (-1, -1), # Heading 3: Southwest
+    (-1, -1),  # Heading 3: Southwest
     (0, -1),  # Heading 4: South
     (1, -1),  # Heading 5: Southeast
-    (1, 0),   # Heading 6: East
-    (1, 1)    # Heading 7: Northeast
+    (1, 0),  # Heading 6: East
+    (1, 1),  # Heading 7: Northeast
 ]

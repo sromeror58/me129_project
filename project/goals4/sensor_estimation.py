@@ -4,7 +4,10 @@ import time
 class SensorEstimator:
     """
     Base class that implements a generic sensor-based estimator framework.
-    Uses a running average approach followed by thresholding with hysteresis.
+    
+    This class provides a foundation for sensor-based state estimation using
+    a running average approach followed by thresholding with hysteresis.
+    It handles time-based updates and maintains an internal state level.
     """
 
     def __init__(self, initial_level=0.0, threshold=0.63):
@@ -22,6 +25,9 @@ class SensorEstimator:
     def update_level(self, raw_value, time_constant):
         """
         Update the estimator level with a new raw value.
+
+        This method implements a time-based running average calculation that
+        weights new values based on the time elapsed since the last update.
 
         Args:
             raw_value (float): Raw value from sensor reading
@@ -54,6 +60,10 @@ class SensorEstimator:
 class IntersectionEstimator(SensorEstimator):
     """
     Detector for identifying valid intersections.
+    
+    This estimator detects when the robot has reached an intersection by
+    monitoring the state of all line sensors. It uses a running average
+    to filter out noise and implements hysteresis to prevent rapid state changes.
     """
 
     def __init__(self, initial_level=0.0, initial_state=False, threshold=0.63):
@@ -73,6 +83,10 @@ class IntersectionEstimator(SensorEstimator):
     def update(self, ir_readings, time_constant=0.5):
         """
         Update the intersection detector with new IR readings.
+
+        This method processes a tuple of IR sensor readings to determine if
+        the robot is at an intersection. It considers an intersection detected
+        when all sensors are active (detecting a line).
 
         Args:
             ir_readings (tuple): Tuple of (left, middle, right) IR sensor readings
@@ -116,7 +130,10 @@ class IntersectionEstimator(SensorEstimator):
 class SideEstimator(SensorEstimator):
     """
     Estimator for determining which side of the road the robot is on.
-    Estimates whether the robot is in the center, on the left, or on the right side.
+    
+    This estimator determines whether the robot is centered on the line,
+    pushed to the left side, or pushed to the right side. It uses a
+    weighted approach based on the pattern of sensor activations.
     """
 
     # Define constants for the three possible states
@@ -140,6 +157,11 @@ class SideEstimator(SensorEstimator):
         """
         Update the road-side estimator with new IR readings.
 
+        This method analyzes the pattern of sensor activations to determine
+        which side of the road the robot is on. It assigns different weights
+        based on which sensors are active and uses a running average to
+        filter out noise.
+
         Args:
             ir_readings (tuple): Tuple of (left, middle, right) IR sensor readings
             time_constant (float): Time constant for the estimator (in seconds)
@@ -157,15 +179,15 @@ class SideEstimator(SensorEstimator):
                 raw_value = -0.5  # Slightly left
             elif left == 0 and right == 0:
                 raw_value = 0.0  # Centered
-            else:  
-                raw_value = self.level  
-        else:  
+            else:
+                raw_value = self.level
+        else:
             if left == 1 and right == 0:
                 raw_value = 1.0  # Significantly right
             elif left == 0 and right == 1:
                 raw_value = -1.0  # Significantly left
-            else:  
-                raw_value = self.level  
+            else:
+                raw_value = self.level
 
         # Update the estimator level
         self.update_level(raw_value, time_constant)
@@ -195,6 +217,11 @@ class SideEstimator(SensorEstimator):
 class EndOfStreetEstimator(SensorEstimator):
     """
     Detector for identifying the end of a street.
+    
+    This estimator detects when the robot has reached the end of a street
+    by monitoring the state of all line sensors and the robot's position
+    relative to the line. It uses a running average to filter out noise
+    and implements hysteresis to prevent rapid state changes.
     """
 
     def __init__(self, initial_level=0.0, initial_state=False, threshold=0.63):
@@ -214,6 +241,11 @@ class EndOfStreetEstimator(SensorEstimator):
     def update(self, ir_readings, side_state, time_constant=1.0):
         """
         Update the end-of-street detector with new IR readings and side state.
+
+        This method analyzes the pattern of sensor activations and the robot's
+        position relative to the line to determine if the robot has reached
+        the end of a street. It considers an end-of-street detected when all
+        sensors are inactive and the robot is centered.
 
         Args:
             ir_readings (tuple): Tuple of (left, middle, right) IR sensor readings
@@ -268,8 +300,11 @@ class EndOfStreetEstimator(SensorEstimator):
 class NextStreetDetector(SensorEstimator):
     """
     Detector for identifying when the robot has found the next street during a turn.
-    Uses hysteresis to avoid false triggers from roadblocks or "false streets".
-
+    
+    This detector tracks the robot's progress through a turn, identifying when
+    it has left the current street and found the next street. It uses a two-phase
+    approach with hysteresis to avoid false triggers from roadblocks or "false streets".
+    
     Two scenarios:
     1. Starting with sensor on a line: Need to see off-road then on-road again
     2. Starting with sensor not on a line: Just need to see on-road
@@ -293,53 +328,65 @@ class NextStreetDetector(SensorEstimator):
         """
         Update the next-street detector with new IR readings.
 
+        This method implements a two-phase detection process:
+        1. First phase: Detect when the robot has left the current street
+        2. Second phase: Detect when the robot has found the next street
+        
+        It uses different detection logic based on the initial sensor state
+        and implements hysteresis to prevent false triggers.
+
         Args:
             ir_readings (tuple): Tuple of (left, middle, right) IR sensor readings
             time_constant (float): Time constant for the detector (in seconds)
 
         Returns:
-            bool: True if the next street is detected, False otherwise
+            tuple: (state, isTransition) where:
+                - state (bool): True if the next street is detected, False otherwise
+                - isTransition (bool): True if transitioning from phase 1 to phase 2
         """
         middle = ir_readings[1]
         prev_looking_for_on_road = self.looking_for_on_road
-        
+
         # Record the initial reading on first call
         if self.initial_reading is None:
             self.initial_reading = middle
-            self.looking_for_on_road = (middle == 0)
-        
+            self.looking_for_on_road = middle == 0
+
         # Calculate raw value based on what we're looking for
         if not self.looking_for_on_road:
             # We're looking for off-road (middle sensor to be off the line)
             raw_value = 0.0 if middle == 1 else 1.0
-            
+
             # Check if we've found off-road
             if self.level > self.threshold:
                 # Now transition to looking for on-road
                 self.looking_for_on_road = True
                 self.level = 0.0
                 print("Turning: Off the current street")
-        
+
         elif not self.found_next_street:
             # We're looking for on-road (middle sensor to be on the line)
             raw_value = 1.0 if middle == 1 else 0.0
-            
+
             # Check if we've found on-road
             if self.level > self.threshold:
                 self.found_next_street = True
                 print("Turning: Found the next street!")
-        
+
         # Update detector level
         self.update_level(raw_value, time_constant)
-        
+
         # Set state
         self.state = self.found_next_street
-        
+
         return self.state, ((not prev_looking_for_on_road) and self.looking_for_on_road)
 
     def reset(self):
         """
         Reset the detector to initial values.
+        
+        This method resets all internal state variables to their initial values,
+        allowing the detector to start fresh with a new turn.
         """
         super().reset(0.0)
         self.initial_reading = None

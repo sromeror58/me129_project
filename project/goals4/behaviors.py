@@ -18,22 +18,43 @@ from config import (
 
 
 class Behaviors:
+    """
+    Class that encapsulates the robot's high-level behaviors.
+    
+    This class provides methods for executing complex robot behaviors such as
+    turning, line following, and intersection handling. It coordinates between
+    the drive system, sensors, and magnetometer to implement these behaviors.
+    """
+    
     def __init__(self, drive_system, sensors, adc):
+        """
+        Initialize the Behaviors class with the necessary components.
+        
+        Args:
+            drive_system: The robot's drive system for motor control
+            sensors: The robot's sensors for environmental perception
+            adc: The analog-to-digital converter for magnetometer readings
+        """
         self.drive_system = drive_system
         self.sensors = sensors
         self.adc = adc
-        
+
     def turn_to_next_street(self, direction):
-        """Performs the turning behavior to find the next street at an intersection.
+        """
+        Performs the turning behavior to find the next street at an intersection.
 
         This behavior:
         1. Spins in the specified direction
         2. Detects when the robot has left the current street
         3. Detects when the robot has found the next street
         4. Stops when aligned with the next street
+        5. Calculates the turn angle based on magnetometer readings
 
         Args:
             direction (str): Direction to turn, either 'left' or 'right'
+            
+        Returns:
+            float: The calculated turn angle in degrees
         """
         # Validate and convert the direction parameter
         if direction.lower() == "left":
@@ -58,7 +79,9 @@ class Behaviors:
             # Read sensor data
             reading = self.sensors.read()
 
-            state, isTransition = next_street_detector.update(reading, time_constant=0.085)
+            state, isTransition = next_street_detector.update(
+                reading, time_constant=0.085
+            )
 
             if isTransition:
                 adjustedangle1 = self.adc.readangle()
@@ -69,9 +92,11 @@ class Behaviors:
                 isLeft = False
                 if spin_direction == SPIN_L:
                     isLeft = True
-                print(f"Found and aligned with next street!\nTime to turn to next street was {curr - t0} sec.")
+                print(
+                    f"Found and aligned with next street!\nTime to turn to next street was {curr - t0} sec."
+                )
                 break
-            
+
             else:
                 self.drive_system.drive(spin_direction)
 
@@ -88,16 +113,22 @@ class Behaviors:
                 # Want to weight closer to turnAngle2 the larger the turn is: 0/5 to 4/5
                 x = abs(turnAngle1) / 360
                 weight = (3 * x**2 - 2 * x**3) / 1.1
-                turnAngle1 = (1-weight) * turnAngle1 + (weight) * turnAngle2
+                turnAngle1 = (1 - weight) * turnAngle1 + (weight) * turnAngle2
 
         print(turnAngle1)
         return turnAngle1
-    
+
     def pull_forward(self, travel_time=0.5):
-        """Performs the pull forward behavior after detecting a valid intersection.
+        """
+        Performs the pull forward behavior after detecting a valid intersection.
+        
+        This method drives the robot straight ahead for a specified duration,
+        typically used to center the robot in an intersection or move past
+        a detected intersection point.
 
         Args:
-            travel_time (float): Amount of time to pull forward.
+            travel_time (float): Amount of time in seconds to pull forward.
+                               Defaults to 0.5 seconds.
         """
         t_0 = time.time()
         curr = time.time()
@@ -105,15 +136,26 @@ class Behaviors:
             self.drive_system.drive(STRAIGHT)
             curr = time.time()
         self.drive_system.stop()
-        
+
     def line_follow(self):
-        """Performs the line following behavior.
+        """
+        Performs the line following behavior.
         
+        This method implements the core line-following algorithm that:
+        1. Continuously reads sensor data to determine the robot's position relative to the line
+        2. Detects intersections and handles them appropriately
+        3. Detects the end of streets and initiates U-turns
+        4. Adjusts the robot's direction based on sensor readings to stay on the line
+        
+        Returns:
+            tuple: (isUturn, travel_time) where:
+                - isUturn (bool): True if a U-turn was performed, False otherwise
+                - travel_time (float): Time spent following the line in seconds
         """
         intersection_estimator = IntersectionEstimator()
         side_estimator = SideEstimator()
         eos_estimator = EndOfStreetEstimator()
-        
+
         t0 = time.time()
         while True:
             reading = self.sensors.read()
