@@ -240,11 +240,8 @@ class Map:
             for h in range(8):
                 # Get the direction vector for this heading
                 dx, dy = DX_DY_TABLE[h]
-
-                # Scale to half-length (0.5 for cardinal, ~0.707 for diagonal)
-                length = 0.5 if dx == 0 or dy == 0 else 0.3 * math.sqrt(2)
-                dx *= length
-                dy *= length
+                dx *= 0.5
+                dy *= 0.5
 
                 # Get intersection status and corresponding color
                 status = self.getintersection(x_int, y_int).streets[h]
