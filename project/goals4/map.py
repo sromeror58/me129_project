@@ -154,8 +154,6 @@ class Map:
         # Calculate start and end points to center the arrow
         x_start = pose.x - dx/2  # Start point offset by half the arrow length
         y_start = pose.y - dy/2
-        x_end = pose.x + dx/2    # End point offset by half the arrow length
-        y_end = pose.y + dy/2
         
         # Draw the arrow
         plt.arrow(x_start, y_start,          # Start position (base)

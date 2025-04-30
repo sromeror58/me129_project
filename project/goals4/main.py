@@ -2,12 +2,10 @@
 import pigpio
 import traceback
 import os
-import sys
 import argparse
 from drive_system import DriveSystem
 from sensor import LineSensor
 from behaviors import Behaviors
-import time
 from pose import Pose
 from magnetometer import ADC
 from map import Map

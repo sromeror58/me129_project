@@ -1,7 +1,3 @@
-import matplotlib
-matplotlib.use('TkAgg') 
-import matplotlib.pyplot as plt
-import math
 from config import DX_DY_TABLE
 
 def getTurnAngle(angle1: float, angle2: float, isLeft: bool = True):

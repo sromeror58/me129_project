@@ -69,7 +69,6 @@ class Behaviors:
                 isLeft = False
                 if spin_direction == SPIN_L:
                     isLeft = True
-                angle2 = self.adc.readangle()
                 print(f"Found and aligned with next street!\nTime to turn to next street was {curr - t0} sec.")
                 break
             
