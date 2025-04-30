@@ -164,7 +164,7 @@ class Behaviors:
             if intersection_estimator.update(reading, 0.1):
                 curr = time.time()
                 # Then pull forward
-                self.pull_forward(travel_time=0.30)
+                self.pull_forward(travel_time=0.36)
 
                 # isUturn, travel time
                 return False, curr - t0
