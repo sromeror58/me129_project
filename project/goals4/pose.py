@@ -4,6 +4,27 @@ import matplotlib.pyplot as plt
 import math
 from config import DX_DY_TABLE
 
+def getTurnAngle(angle1: float, angle2: float, isLeft: bool = True):
+    # Normalize angles to [-180, 180] range
+    angle1 = ((angle1 + 180) % 360) - 180
+    angle2 = ((angle2 + 180) % 360) - 180
+    
+    # Calculate the difference
+    diff = angle2 - angle1
+    
+    if isLeft:
+        # For left turns, we want positive values
+        # If diff is negative, we need to go the other way around
+        if diff < 0:
+            diff += 360
+    else:
+        # For right turns, we want negative values
+        # If diff is positive, we need to go the other way around
+        if diff > 0:
+            diff -= 360
+            
+    return diff
+
 class Pose:
     def __init__(self, xinit: float = 0.0, yinit: float = 0.0, heading: int = 0):
         self.x = xinit
@@ -23,7 +44,7 @@ class Pose:
         self.y += dy
         print(f"Position after move: ({self.x}, {self.y}, heading: {self.heading})")
 
-    def calcturn(self, angle1: float, angle2: float):
+    def calcturn(self, turnAngle: float, isLeft: bool):
         """
         Calculate the turn angle between two angles.
         
@@ -34,18 +55,11 @@ class Pose:
         Returns:
             float: Turn angle in degrees. Positive for left turns (CCW), negative for right turns (CW).
         """
-        # Normalize angles to [-180, 180] range
-        angle1 = ((angle1 + 180) % 360) - 180
-        angle2 = ((angle2 + 180) % 360) - 180
-        diff = angle2 - angle1
-        # Handle case where we need to go the other way around the circle
-        if diff > 180:
-            diff -= 360
-        elif diff < -180:
-            diff += 360
-        turn = int(round(diff / 45))
+        turn = int(round(turnAngle/ 45))
         self.heading = (self.heading + turn) % 8
         print(f"Position after turn: ({self.x}, {self.y}, heading: {self.heading})")
+
+
 
     def calcuturn(self):
         self.heading = (self.heading + 4) % 8

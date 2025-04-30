@@ -121,13 +121,7 @@ class Map:
             pose1 (Pose): Ending pose
         """
         intersection = self.getintersection(pose0.x, pose0.y)
-        if intersection.streets[pose0.heading] != STATUS.DEADEND:
-            intersection.streets[pose0.heading] = STATUS.DEADEND
-            intersection = self.getintersection(pose1.x, pose1.y)
-            intersection.streets[(pose0.heading + 4) % 8] = STATUS.CONNECTED
-            for i in range(0, 8):
-                if i != pose0.heading:
-                    intersection.streets[i] = STATUS.NONEXISTENT
+        intersection.streets[pose0.heading] = STATUS.DEADEND
         self.plot(pose1)
 
     def plot(self, pose):
@@ -202,8 +196,12 @@ class Map:
         
         # If using TkAgg backend, display the plot
         if os.environ.get('display_map') == 'on':
-            plt.draw()
-            plt.pause(0.1)  # Small pause to allow the plot to update
+            try:
+                plt.draw()
+                plt.pause(0.1)  # Small pause to allow the plot to update
+            except KeyboardInterrupt:
+                # Silently handle keyboard interrupts during plotting
+                pass
 
     def save_plot(self, pose):
         """
@@ -225,6 +223,10 @@ class Map:
         Properly close all matplotlib resources.
         This should be called when the program exits.
         """
-        plt.close('all')  # Close all figures
-        if os.environ.get('display_map') == 'on':
-            plt.close()  # Ensure the main figure is closed
+        try:
+            plt.close('all')  # Close all figures
+            if os.environ.get('display_map') == 'on':
+                plt.close()  # Ensure the main figure is closed
+        except KeyboardInterrupt:
+            # Silently handle keyboard interrupts during cleanup
+            pass

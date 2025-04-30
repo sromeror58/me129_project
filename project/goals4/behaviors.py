@@ -5,6 +5,7 @@ from sensor_estimation import (
     EndOfStreetEstimator,
     NextStreetDetector,
 )
+from pose import getTurnAngle
 from config import (
     STRAIGHT,
     TURN_L,
@@ -51,13 +52,23 @@ class Behaviors:
         # Continuous loop for turning behavior
         t0 = time.time()
         angle1 = self.adc.readangle()
+        adjustedangle1 = None
 
         while True:
             # Read sensor data
             reading = self.sensors.read()
 
-            if next_street_detector.update(reading, time_constant=0.1):
+            state, isTransition = next_street_detector.update(reading, time_constant=0.085)
+
+            if isTransition:
+                adjustedangle1 = self.adc.readangle()
+                print("BING")
+
+            if state:
                 curr = time.time()
+                isLeft = False
+                if spin_direction == SPIN_L:
+                    isLeft = True
                 angle2 = self.adc.readangle()
                 print(f"Found and aligned with next street!\nTime to turn to next street was {curr - t0} sec.")
                 break
@@ -66,7 +77,22 @@ class Behaviors:
                 self.drive_system.drive(spin_direction)
 
         self.drive_system.stop()
-        return angle1, angle2
+
+        turnAngle1 = getTurnAngle(angle1, self.adc.readangle(), isLeft)
+        print(turnAngle1)
+        if adjustedangle1:
+            turnAngle2 = getTurnAngle(adjustedangle1, self.adc.readangle(), isLeft)
+            print(turnAngle2)
+
+            # If less than full turn, since full turn's are pretty obvious
+            if abs(turnAngle2 - turnAngle1) <= 90:
+                # Want to weight closer to turnAngle2 the larger the turn is: 0/5 to 4/5
+                x = abs(turnAngle1) / 360
+                weight = (3 * x**2 - 2 * x**3) / 1.1
+                turnAngle1 = (1-weight) * turnAngle1 + (weight) * turnAngle2
+
+        print(turnAngle1)
+        return turnAngle1
     
     def pull_forward(self, travel_time=0.5):
         """Performs the pull forward behavior after detecting a valid intersection.
@@ -97,7 +123,7 @@ class Behaviors:
             if intersection_estimator.update(reading, 0.1):
                 curr = time.time()
                 # Then pull forward
-                self.pull_forward(travel_time=0.35)
+                self.pull_forward(travel_time=0.30)
 
                 # isUturn, travel time
                 return False, curr - t0
@@ -107,7 +133,8 @@ class Behaviors:
             print(f"Road side: {side}")
 
             # Check for end of street
-            if eos_estimator.update(reading, side, 0.675):
+            if eos_estimator.update(reading, side, 0.09):
+                self.pull_forward(travel_time=0.6)
                 curr = time.time()
                 print("End of street detected!")
                 self.turn_to_next_street("left")

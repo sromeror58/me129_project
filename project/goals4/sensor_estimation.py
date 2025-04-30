@@ -301,6 +301,7 @@ class NextStreetDetector(SensorEstimator):
             bool: True if the next street is detected, False otherwise
         """
         middle = ir_readings[1]
+        prev_looking_for_on_road = self.looking_for_on_road
         
         # Record the initial reading on first call
         if self.initial_reading is None:
@@ -333,7 +334,8 @@ class NextStreetDetector(SensorEstimator):
         
         # Set state
         self.state = self.found_next_street
-        return self.state
+        
+        return self.state, ((not prev_looking_for_on_road) and self.looking_for_on_road)
 
     def reset(self):
         """

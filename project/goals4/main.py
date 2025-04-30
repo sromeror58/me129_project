@@ -85,8 +85,8 @@ def simple_brain(behaviors, robot, map):
             # Store current pose values before turning
             pose0 = pose.clone()
             
-            angle1, angle2 = behaviors.turn_to_next_street("left")
-            pose.calcturn(angle1, angle2)
+            turnAngle = behaviors.turn_to_next_street("left")
+            pose.calcturn(turnAngle, True)
             
             map.outcomeA(pose0, pose, True)
 
@@ -97,8 +97,8 @@ def simple_brain(behaviors, robot, map):
             # Store current pose values before turning
             pose0 = pose.clone()
             
-            angle1, angle2 = behaviors.turn_to_next_street("right")
-            pose.calcturn(angle1, angle2)
+            turnAngle = behaviors.turn_to_next_street("right")
+            pose.calcturn(turnAngle, False)
             
             map.outcomeA(pose0, pose, False)
 
@@ -122,10 +122,8 @@ def simple_brain(behaviors, robot, map):
 
 
         else:
-            print("Invalid command, quitting...")
-            robot.stop()
-            map.close()  
-            break
+            print("Invalid command...")
+            continue
 
 def main_simple_brain():
     # Parse command line arguments
@@ -155,6 +153,8 @@ def main_simple_brain():
         # Create a map instance and pass it to simple_brain
         map = Map()
         simple_brain(behaviors, robot, map)
+    except KeyboardInterrupt:
+        print("\nKeyboard interrupt received. Shutting down...")
     except BaseException as ex:
         print("Ending due to exception: %s" % repr(ex))
         traceback.print_exc()
