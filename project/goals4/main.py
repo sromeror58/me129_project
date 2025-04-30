@@ -52,7 +52,7 @@ class Robot:
             print(f"Error stopping pigpio: {e}")
 
 
-def simple_brain(behaviors, robot, map):
+def simple_brain(behaviors, robot, map, x=0.0, y=0.0, heading=0):
     """
     Simple brain function that handles robot navigation and mapping.
 
@@ -66,8 +66,11 @@ def simple_brain(behaviors, robot, map):
         behaviors (Behaviors): Robot behaviors instance for executing movements
         robot (Robot): Robot instance for hardware control
         map (Map): Map instance for tracking explored areas
+        x (float): Initial x-coordinate (default: 0.0)
+        y (float): Initial y-coordinate (default: 0.0)
+        heading (int): Initial heading direction (0-7, default: 0)
     """
-    pose = Pose()
+    pose = Pose(x, y, heading)
     map.plot(pose)
 
     while True:
@@ -151,6 +154,9 @@ def main_simple_brain():
 
     Command line arguments:
         --display: Enable real-time map display using TkAgg backend
+        --x: Initial x-coordinate (default: 0.0)
+        --y: Initial y-coordinate (default: 0.0)
+        --heading: Initial heading direction (0-7, default: 0)
     """
     # Parse command line arguments
     parser = argparse.ArgumentParser(description="Robot navigation and mapping")
@@ -158,6 +164,24 @@ def main_simple_brain():
         "--display",
         action="store_true",
         help="Display map in real-time using TkAgg backend",
+    )
+    parser.add_argument(
+        "--x",
+        type=float,
+        default=0.0,
+        help="Initial x-coordinate (default: 0.0)",
+    )
+    parser.add_argument(
+        "--y",
+        type=float,
+        default=0.0,
+        help="Initial y-coordinate (default: 0.0)",
+    )
+    parser.add_argument(
+        "--heading",
+        type=int,
+        default=0,
+        help="Initial heading direction (0-7, default: 0)",
     )
     args = parser.parse_args()
 
@@ -182,7 +206,7 @@ def main_simple_brain():
     try:
         # Create a map instance and pass it to simple_brain
         map = Map()
-        simple_brain(behaviors, robot, map)
+        simple_brain(behaviors, robot, map, args.x, args.y, args.heading)
     except KeyboardInterrupt:
         print("\nKeyboard interrupt received. Shutting down...")
     except BaseException as ex:
