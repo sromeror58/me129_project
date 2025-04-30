@@ -15,7 +15,7 @@ class Robot:
     """
     Class that encapsulates all the robot components such as the drive system
     and sensors.
-    
+
     This class serves as a high-level interface to control the robot's hardware
     components, providing methods to initialize and safely shut down the robot.
     """
@@ -34,7 +34,7 @@ class Robot:
     def stop(self):
         """
         Safely stop all motors and clean up the pigpio connection.
-        
+
         This method ensures that all motors are stopped and the pigpio interface
         is properly closed, even if exceptions occur during the shutdown process.
         """
@@ -55,7 +55,7 @@ class Robot:
 def simple_brain(behaviors, robot, map):
     """
     Simple brain function that handles robot navigation and mapping.
-    
+
     This function implements a basic control loop that:
     1. Accepts user commands for robot movement
     2. Updates the robot's pose based on the commands
@@ -141,14 +141,14 @@ def simple_brain(behaviors, robot, map):
 def main_simple_brain():
     """
     Main entry point for the robot navigation and mapping program.
-    
+
     This function:
     1. Parses command line arguments
     2. Initializes hardware components (pigpio, drive system, sensors)
     3. Creates a map instance
     4. Runs the simple_brain control loop
     5. Handles cleanup and exceptions
-    
+
     Command line arguments:
         --display: Enable real-time map display using TkAgg backend
     """

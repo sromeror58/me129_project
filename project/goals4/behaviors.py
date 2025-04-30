@@ -20,16 +20,16 @@ from config import (
 class Behaviors:
     """
     Class that encapsulates the robot's high-level behaviors.
-    
+
     This class provides methods for executing complex robot behaviors such as
     turning, line following, and intersection handling. It coordinates between
     the drive system, sensors, and magnetometer to implement these behaviors.
     """
-    
+
     def __init__(self, drive_system, sensors, adc):
         """
         Initialize the Behaviors class with the necessary components.
-        
+
         Args:
             drive_system: The robot's drive system for motor control
             sensors: The robot's sensors for environmental perception
@@ -52,7 +52,7 @@ class Behaviors:
 
         Args:
             direction (str): Direction to turn, either 'left' or 'right'
-            
+
         Returns:
             float: The calculated turn angle in degrees
         """
@@ -121,7 +121,7 @@ class Behaviors:
     def pull_forward(self, travel_time=0.5):
         """
         Performs the pull forward behavior after detecting a valid intersection.
-        
+
         This method drives the robot straight ahead for a specified duration,
         typically used to center the robot in an intersection or move past
         a detected intersection point.
@@ -140,13 +140,13 @@ class Behaviors:
     def line_follow(self):
         """
         Performs the line following behavior.
-        
+
         This method implements the core line-following algorithm that:
         1. Continuously reads sensor data to determine the robot's position relative to the line
         2. Detects intersections and handles them appropriately
         3. Detects the end of streets and initiates U-turns
         4. Adjusts the robot's direction based on sensor readings to stay on the line
-        
+
         Returns:
             tuple: (isUturn, travel_time) where:
                 - isUturn (bool): True if a U-turn was performed, False otherwise

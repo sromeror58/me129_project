@@ -36,18 +36,18 @@ SCALE = 180 / math.pi
 class ADC:
     """
     Analog-to-Digital Converter interface for the magnetometer.
-    
+
     This class provides methods to read raw ADC values from the magnetometer
     and convert them to angle measurements. It handles the low-level communication
     with the hardware through the pigpio interface.
     """
-    
+
     def __init__(self, io):
         """
         Initialize the ADC interface with the pigpio instance.
-        
+
         Sets up all the necessary GPIO pins for communication with the magnetometer.
-        
+
         Args:
             io (pigpio.pi): pigpio interface instance for hardware communication
         """
@@ -67,13 +67,13 @@ class ADC:
     def readadc(self, address):
         """
         Read a raw ADC value from the specified address.
-        
+
         This method handles the low-level communication protocol with the magnetometer,
         including setting the address, toggling the latch, and reading the data pins.
-        
+
         Args:
             address (int): The address to read from (0 or 1)
-            
+
         Returns:
             int: The raw ADC value read from the specified address
         """
@@ -90,12 +90,12 @@ class ADC:
     def scale(self, min_val, max_val, curr_val):
         """
         Scale a value from its current range to the range [-1, 1].
-        
+
         Args:
             min_val (float): Minimum value of the current range
             max_val (float): Maximum value of the current range
             curr_val (float): Current value to scale
-            
+
         Returns:
             float: Scaled value in the range [-1, 1]
         """
@@ -104,10 +104,10 @@ class ADC:
     def readangle(self):
         """
         Read and calculate the current angle from the magnetometer.
-        
+
         This method reads raw values from both ADC channels, scales them to the
         range [-1, 1], and calculates the angle using the arctangent function.
-        
+
         Returns:
             float: The current angle in degrees
         """
@@ -125,7 +125,7 @@ class ADC:
 def test1():
     """
     Test function to calibrate the magnetometer.
-    
+
     This function continuously reads raw ADC values from both channels
     and tracks the minimum and maximum values to help determine the
     calibration constants MIN_0, MAX_0, MIN_1, and MAX_1.
@@ -158,7 +158,7 @@ def test1():
 def test3():
     """
     Test function to verify the angle reading functionality.
-    
+
     This function continuously reads and displays the current angle
     from the magnetometer, allowing for verification of the angle
     calculation and calibration.

@@ -4,12 +4,12 @@ from config import DX_DY_TABLE
 def getTurnAngle(angle1: float, angle2: float, isLeft: bool = True):
     """
     Calculate the turn angle between two angles.
-    
+
     Args:
         angle1: First angle in degrees
         angle2: Second angle in degrees
         isLeft: Boolean indicating if the turn is to the left (True) or right (False)
-        
+
     Returns:
         float: The turn angle in degrees. Positive for left turns, negative for right turns.
     """
@@ -37,7 +37,7 @@ def getTurnAngle(angle1: float, angle2: float, isLeft: bool = True):
 class Pose:
     """
     A class representing a position and heading in a 2D grid.
-    
+
     The heading is represented as an integer from 0 to 7, where:
     0: North
     1: Northeast
@@ -48,11 +48,11 @@ class Pose:
     6: West
     7: Northwest
     """
-    
+
     def __init__(self, xinit: float = 0.0, yinit: float = 0.0, heading: int = 0):
         """
         Initialize a new Pose object.
-        
+
         Args:
             xinit: Initial x-coordinate (default: 0.0)
             yinit: Initial y-coordinate (default: 0.0)
@@ -65,7 +65,7 @@ class Pose:
     def clone(self):
         """
         Create a deep copy of this Pose object.
-        
+
         Returns:
             Pose: A new Pose object with the same x, y, and heading values.
         """
@@ -74,7 +74,7 @@ class Pose:
     def calcmove(self):
         """
         Update x and y coordinates for one travel step in the direction of the current heading.
-        
+
         This method uses the DX_DY_TABLE to determine the change in x and y coordinates
         based on the current heading, then updates the position accordingly.
         """
@@ -86,7 +86,7 @@ class Pose:
     def calcturn(self, turnAngle: float, isLeft: bool):
         """
         Calculate and apply a turn based on the given angle.
-        
+
         Args:
             turnAngle: The angle to turn in degrees
             isLeft: Boolean indicating if the turn is to the left (True) or right (False)

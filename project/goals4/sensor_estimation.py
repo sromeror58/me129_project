@@ -4,7 +4,7 @@ import time
 class SensorEstimator:
     """
     Base class that implements a generic sensor-based estimator framework.
-    
+
     This class provides a foundation for sensor-based state estimation using
     a running average approach followed by thresholding with hysteresis.
     It handles time-based updates and maintains an internal state level.
@@ -60,7 +60,7 @@ class SensorEstimator:
 class IntersectionEstimator(SensorEstimator):
     """
     Detector for identifying valid intersections.
-    
+
     This estimator detects when the robot has reached an intersection by
     monitoring the state of all line sensors. It uses a running average
     to filter out noise and implements hysteresis to prevent rapid state changes.
@@ -130,7 +130,7 @@ class IntersectionEstimator(SensorEstimator):
 class SideEstimator(SensorEstimator):
     """
     Estimator for determining which side of the road the robot is on.
-    
+
     This estimator determines whether the robot is centered on the line,
     pushed to the left side, or pushed to the right side. It uses a
     weighted approach based on the pattern of sensor activations.
@@ -217,7 +217,7 @@ class SideEstimator(SensorEstimator):
 class EndOfStreetEstimator(SensorEstimator):
     """
     Detector for identifying the end of a street.
-    
+
     This estimator detects when the robot has reached the end of a street
     by monitoring the state of all line sensors and the robot's position
     relative to the line. It uses a running average to filter out noise
@@ -300,11 +300,11 @@ class EndOfStreetEstimator(SensorEstimator):
 class NextStreetDetector(SensorEstimator):
     """
     Detector for identifying when the robot has found the next street during a turn.
-    
+
     This detector tracks the robot's progress through a turn, identifying when
     it has left the current street and found the next street. It uses a two-phase
     approach with hysteresis to avoid false triggers from roadblocks or "false streets".
-    
+
     Two scenarios:
     1. Starting with sensor on a line: Need to see off-road then on-road again
     2. Starting with sensor not on a line: Just need to see on-road
@@ -331,7 +331,7 @@ class NextStreetDetector(SensorEstimator):
         This method implements a two-phase detection process:
         1. First phase: Detect when the robot has left the current street
         2. Second phase: Detect when the robot has found the next street
-        
+
         It uses different detection logic based on the initial sensor state
         and implements hysteresis to prevent false triggers.
 
@@ -384,7 +384,7 @@ class NextStreetDetector(SensorEstimator):
     def reset(self):
         """
         Reset the detector to initial values.
-        
+
         This method resets all internal state variables to their initial values,
         allowing the detector to start fresh with a new turn.
         """

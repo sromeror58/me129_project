@@ -12,7 +12,7 @@ from config import DX_DY_TABLE
 class STATUS(Enum):
     """
     Enumeration representing the possible states of a street in the map.
-    
+
     Values:
         UNKNOWN: Street status is not yet determined
         NONEXISTENT: Street does not exist at this intersection
@@ -20,6 +20,7 @@ class STATUS(Enum):
         DEADEND: Street leads to a dead end
         CONNECTED: Street connects to another intersection
     """
+
     UNKNOWN = 0
     NONEXISTENT = 1
     UNEXPLORED = 2
@@ -30,11 +31,11 @@ class STATUS(Enum):
 class Intersection:
     """
     Represents an intersection in the map with coordinates and street statuses.
-    
+
     Each intersection has 8 possible streets (one for each direction) and tracks
     the status of each street.
     """
-    
+
     def __init__(self, x, y):
         """
         Initialize an intersection with coordinates and street statuses.
@@ -55,9 +56,9 @@ class Intersection:
     def updateStreet(self, heading, status):
         """
         Update the status of a street at the specified heading.
-        
+
         Only updates the status if the current status is UNKNOWN or UNEXPLORED.
-        
+
         Args:
             heading (int): Direction of the street (0-7)
             status (STATUS): New status to set for the street
@@ -70,16 +71,16 @@ class Intersection:
 class Map:
     """
     Represents a map of intersections and their connections.
-    
+
     The map tracks the robot's exploration of a grid of intersections,
     recording which streets exist, which have been explored, and which
     lead to dead ends or connect to other intersections.
     """
-    
+
     def __init__(self, pose=None):
         """
         Initialize a new map with an optional starting pose.
-        
+
         Args:
             pose (Pose, optional): Starting position and heading of the robot.
                                   Defaults to a new Pose at (0,0) facing north.
@@ -107,7 +108,7 @@ class Map:
     def outcomeA(self, pose0, pose1, isLeft: bool):
         """
         Set streets to STATUS.NONEXISTENT based on the direction of turn from pose0 to pose1.
-        
+
         This method is called when the robot makes a turn. It marks all streets between
         the starting heading and ending heading as non-existent, except for the street
         that was actually taken.
@@ -148,7 +149,7 @@ class Map:
     def outcomeB(self, pose0, pose1):
         """
         Update intersection status for a straight movement from pose0 to pose1.
-        
+
         This method is called when the robot moves straight ahead. It marks
         the street as connected at both the starting and ending intersections.
 
@@ -165,7 +166,7 @@ class Map:
     def outcomeC(self, pose0, pose1):
         """
         Update intersection status for a U-turn from pose0 to pose1.
-        
+
         This method is called when the robot makes a U-turn. It marks
         the street as a dead end at the starting intersection.
 
@@ -180,7 +181,7 @@ class Map:
     def plot(self, pose):
         """
         Create a plot showing the current robot pose and map state.
-        
+
         This method visualizes the map, showing all intersections, streets,
         and their statuses, along with the current robot position and heading.
 
@@ -264,7 +265,7 @@ class Map:
     def save_plot(self, pose):
         """
         Create the plot and save it to a file instead of displaying it.
-        
+
         This method is useful for saving map visualizations to files for later review
         or for generating reports.
 
@@ -282,7 +283,7 @@ class Map:
     def close(self):
         """
         Properly close all matplotlib resources.
-        
+
         This should be called when the program exits to ensure all
         matplotlib resources are properly released.
         """
