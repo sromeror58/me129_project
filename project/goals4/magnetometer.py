@@ -19,15 +19,19 @@ from config import (
     MAX_1,
 )
 
+# PINS = {
+#     PIN_MAG_PIN0: 1,
+#     PIN_MAG_PIN1: 2,
+#     PIN_MAG_PIN2: 4,
+#     PIN_MAG_PIN3: 8,
+#     PIN_MAG_PIN4: 16,
+#     PIN_MAG_PIN5: 32,
+#     PIN_MAG_PIN6: 64,
+#     PIN_MAG_PIN7: 128,
+# }
+
 PINS = {
-    PIN_MAG_PIN0: 1,
-    PIN_MAG_PIN1: 2,
-    PIN_MAG_PIN2: 4,
-    PIN_MAG_PIN3: 8,
-    PIN_MAG_PIN4: 16,
-    PIN_MAG_PIN5: 32,
-    PIN_MAG_PIN6: 64,
-    PIN_MAG_PIN7: 128,
+    globals()[f"PIN_MAG_PIN{i}"]: 1 << i for i in range(8)
 }
 
 SCALE = 180 / math.pi
@@ -55,14 +59,8 @@ class ADC:
         self.io.set_mode(PIN_MAG_LATCH, pigpio.OUTPUT)
         self.io.set_mode(PIN_MAG_ADDRESS, pigpio.OUTPUT)
         self.io.set_mode(PIN_MAG_READY, pigpio.INPUT)
-        self.io.set_mode(PIN_MAG_PIN0, pigpio.INPUT)
-        self.io.set_mode(PIN_MAG_PIN1, pigpio.INPUT)
-        self.io.set_mode(PIN_MAG_PIN2, pigpio.INPUT)
-        self.io.set_mode(PIN_MAG_PIN3, pigpio.INPUT)
-        self.io.set_mode(PIN_MAG_PIN4, pigpio.INPUT)
-        self.io.set_mode(PIN_MAG_PIN5, pigpio.INPUT)
-        self.io.set_mode(PIN_MAG_PIN6, pigpio.INPUT)
-        self.io.set_mode(PIN_MAG_PIN7, pigpio.INPUT)
+        for pin in PINS.keys():
+            self.io.set_mode(pin, pigpio.INPUT)
 
     def readadc(self, address):
         """
