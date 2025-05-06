@@ -2,12 +2,35 @@ from enum import Enum
 from pose import Pose
 import matplotlib
 import os
+import pickle
 
 # Check if display_map environment variable is set to "on"
 import matplotlib.pyplot as plt
 import math
 from config import DX_DY_TABLE
 
+
+def sortedInsert(list, node):
+    """
+    Inserts an Intersection node into a list of Intersection objects, maintaining ascending order by cost.
+    Args:
+        list (list of Intersection): The list of nodes sorted by increasing cost.
+        node (Intersection): The node to insert into the list.
+    """
+    # Scan through the list, comparing costs
+    for i in range(len(list)):
+        if list[i].cost > node.cost:
+        # Found the proper place to insert.
+            list.insert(i, node)
+            return
+    # Nothing found, append at end.
+    list.append(node)
+    return
+
+def distance(dx, dy):
+    if (dx, dy) in [(1,0), (0, 1), (-1, 0), (0, -1)]:
+        return 1.4
+    return 1
 
 class STATUS(Enum):
     """
@@ -46,6 +69,8 @@ class Intersection:
         """
         self.x = x
         self.y = y
+        self.cost = float('inf')
+        self.direction = None
         if streets is not None:
             self.streets = streets
         else:
@@ -69,6 +94,8 @@ class Intersection:
         if self.streets[heading] not in [STATUS.UNKNOWN, STATUS.UNEXPLORED]:
             return
         self.streets[heading] = status
+    def setcost(self, cost):
+        self.cost = cost
 
 
 class Map:
@@ -271,23 +298,84 @@ class Map:
             except KeyboardInterrupt:
                 # Silently handle keyboard interrupts during plotting
                 pass
+    
+    def plot(self):
+        """
+        Create a plot showing the current map state only (FOR DIJKSTRA's).
 
-    def save_plot(self, pose):
+        This method visualizes the map, showing all intersections, streets,
+        and their statuses.
+        """
+        # Clear the current, or create a new figure.
+        plt.clf()
+        # Create a new axes, enable the grid, and set axis limits.
+        plt.axes()
+        plt.gca().set_xlim(-3.5, 3.5)
+        plt.gca().set_ylim(-3.5, 3.5)
+        plt.gca().set_aspect("equal")
+        # Show all the possible locations.
+        for x_grid in range(-3, 4):
+            for y_grid in range(-3, 4):
+                plt.plot(x_grid, y_grid, color="lightgray", marker="o", markersize=8)
+
+        # Draw the intersections
+        # Define colors for each status
+        status_colors = {
+            STATUS.UNKNOWN: "black",
+            STATUS.NONEXISTENT: "lightgray",
+            STATUS.UNEXPLORED: "blue",
+            STATUS.DEADEND: "red",
+            STATUS.CONNECTED: "green",
+        }
+
+        # For each intersection in the map
+        for x_int, y_int in self.intersections:
+            # For each possible heading from that intersection
+            for h in range(8):
+                # Get the direction vector for this heading
+                dx, dy = DX_DY_TABLE[h]
+                dx *= 0.5
+                dy *= 0.5
+
+                # Get intersection status and corresponding color
+                status = self.getintersection(x_int, y_int).streets[h]
+                color = status_colors[status]
+
+                # Draw line from intersection halfway to next
+                plt.plot([x_int, x_int + dx], [y_int, y_int + dy], color=color)
+
+        # If using TkAgg backend, display the plot
+        if os.environ.get("display_map") == "on":
+            try:
+                plt.draw()
+                plt.pause(0.1)  # Small pause to allow the plot to update
+            except KeyboardInterrupt:
+                # Silently handle keyboard interrupts during plotting
+                pass
+
+    def save_map(self, filename='mymap.pickle'):
         """
         Create the plot and save it to a file instead of displaying it.
 
         This method is useful for saving map visualizations to files for later review
         or for generating reports.
-
-        Args:
-            pose (Pose): Current robot pose
         """
         self.plot(pose)
 
         # Instead of plt.pause(), save the figure to a file
-        filename = f"plots/map_x{pose.x}_y{pose.y}_h{pose.heading}.png"
-        plt.savefig(filename)
+        # filename = f"plots/map_x{pose.x}_y{pose.y}_h{pose.heading}.pickle"
+        print("Saving the map to %s..." % filename)
+        with open (filename, 'wb') as file:
+            pickle.dump(self, file)
+        # plt.savefig(filename)
         print(f"Saved map to {filename}")
+    
+    def load_map(self, filename="mymap.pickle"):
+        # filename = f"plots/map_x{pose.x}_y{pose.y}_h{pose.heading}.pickle"
+        print("Loading the map from %s..." % filename) 
+        with open(filename, 'rb') as file:
+            map = pickle.load(file)
+        print(f"Loaded map")
 
     def close(self):
         """
@@ -303,3 +391,30 @@ class Map:
         except KeyboardInterrupt:
             # Silently handle keyboard interrupts during cleanup
             pass
+    def setstreet(self, xgoal, ygoal):
+        for intersection in self.intersections.values():
+            intersection.cost = float('inf')
+            intersection.direction = None
+        
+        # setting goal intersection cost to 0
+        curr_intersection = self.getintersection(xgoal, ygoal)
+        curr_intersection.setcost(0)
+        queue = [curr_intersection]
+        while len(queue) != 0:
+            curr = queue.pop()
+            curr_cost = curr.cost
+            for heading in range(8):
+                if curr.streets[heading] != STATUS.CONNECTED:
+                    continue
+                dx, dy = DX_DY_TABLE[heading]
+                neighbor_x, neighbor_y = curr.x+dx, curr.y+dy
+                neighbor = self.getintersection(neighbor_x, neighbor_y)
+                potential_cost = curr_cost + distance(dx, dy)
+                
+                if potential_cost < neighbor.cost:
+                    neighbor.cost = potential_cost
+                    neighbor.direction = (heading + 4) % 8
+                    sortedInsert(queue, neighbor)
+        return 
+        
+        

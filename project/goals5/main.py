@@ -84,6 +84,23 @@ def initialization_helper(behaviors, robot, heading, x, y):
         current_streets[heading] = STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
     initial_intersection = Intersection(x, y, current_streets)
     return {(x,y): initial_intersection}, heading
+
+def initialize_map():
+    choice = input("Load existing map? (y/n): ").strip().lower()
+    if choice == 'y':
+        filename = input("Enter filename (default: mymap.pickle): ").strip() or "mymap.pickle"
+        map_obj = Map.load_from_file(filename)
+        x = int(input("Enter starting x-coordinate: "))
+        y = int(input("Enter starting y-coordinate: "))
+        heading = int(input("Enter starting heading (0–7): "))
+        pose = Pose(x=x, y=y, heading=heading)
+        return map_obj, pose
+    else:
+        x = int(input("Enter starting x-coordinate: "))
+        y = int(input("Enter starting y-coordinate: "))
+        heading = int(input("Enter starting heading (0–7): "))
+        pose = Pose(x=x, y=y, heading=heading)
+        return Map(pose=pose), pose
         
     
 
