@@ -80,15 +80,20 @@ class Map:
     lead to dead ends or connect to other intersections.
     """
 
-    def __init__(self, pose=None):
+    def __init__(self, pose=None, intersection=None):
         """
         Initialize a new map with an optional starting pose.
 
         Args:
             pose (Pose, optional): Starting position and heading of the robot.
                                   Defaults to a new Pose at (0,0) facing north.
+            intersection (dictionary, optional): Initial dictionary of intersection
+                                                mapping (x,y) to an Intersection object.
         """
-        self.intersections = {}
+        if intersection is None:
+            self.intersections = {}
+        else:
+            self.intersections = intersection
         if pose is None:
             pose = Pose()
         self.getintersection(pose.x, pose.y)

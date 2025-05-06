@@ -8,7 +8,7 @@ from sensor import LineSensor
 from behaviors import Behaviors
 from pose import Pose
 from magnetometer import ADC
-from map import Map
+from map import Map, Intersection, STATUS
 import matplotlib
 
 
@@ -52,12 +52,38 @@ class Robot:
         except Exception as e:
             print(f"Error stopping pigpio: {e}")
 
-def initialization_helper(behaviors, robot, heading):
-    isUturn, travel_time = behaviors.line_follow()
-    if not isUturn:
-        return heading
+def initialization_helper(behaviors, robot, heading, x, y):
+    """
+    Initializes the intersection at (x, y) with street status based on sensor data.
+
+    Uses line-following behavior to check for a U-turn and detect a road ahead, then sets
+    the appropriate street status in the current and opposite headings.
+
+    Args:
+        behaviors (Behaviors): Behavior object
+        robot (Robot): Robot object
+        heading (int): Current heading (0–7).
+        x (int): X-coordinate of the location.
+        y (int): Y-coordinate of the location.
+
+    Returns:
+        tuple: A dict mapping (x, y) to an Intersection, and the updated heading.
+    """
+    isUturn, travel_time, road_ahead = behaviors.line_follow()
+    current_streets = [STATUS.UNKNOWN] * 8
+    if isUturn:
+        # checking if we hit a u-turn meaning we have a deadend in that heading
+        # then we reach a intersection where we will make the intersection at 
+        current_streets[heading] = STATUS.DEADEND
+        heading = (heading + 4) % 8
+        # setting the street ahead of the intersection unexplored if the we have road_ahead
+        # else we keep nonexistent (accounting the pull forward detector)
+        current_streets[heading] = STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
     else:
-        return (heading + 4) % 8
+        # the case when we reach an intersection without a u-turn
+        current_streets[heading] = STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
+    initial_intersection = Intersection(x, y, current_streets)
+    return {(x,y): initial_intersection}, heading
         
     
 
@@ -78,9 +104,9 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
         y (float): Initial y-coordinate (default: 0.0)
         heading (int): Initial heading direction (0-7, default: 0)
     """
-    heading = initialization_helper(behaviors, robot, heading)
+    intersection_dictionary, heading = initialization_helper(behaviors, robot, heading, x, y)
     pose = Pose(x, y, heading)
-    map = Map(pose)
+    map = Map(pose, intersection_dictionary)
     map.plot(pose)
 
     while True:
@@ -135,7 +161,7 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
             # Store current pose values before moving
             pose0 = pose.clone()
 
-            isUturn, travel_time = behaviors.line_follow()
+            isUturn, travel_time, road_ahead = behaviors.line_follow()
 
             # Outcome B
             if not isUturn:

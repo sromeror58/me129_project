@@ -105,7 +105,7 @@ class IntersectionEstimator(SensorEstimator):
 
         # Running average calculation
         self.level = self.level + dt / time_constant * (raw_value - self.level)
-        print(self.level)
+        # print(self.level)
 
         # Threshold with hysteresis
         if self.level > self.threshold:
@@ -393,99 +393,30 @@ class NextStreetDetector(SensorEstimator):
         self.looking_for_on_road = False
         self.found_next_street = False
         self.state = False
-
-# class PullThroughDetector(SensorEstimator):
-#     def __init__(self, initial_level=0.0, initial_state=False, threshold=0.63):
-#         super().__init__(initial_level, threshold)
-#         self.state = initial_state
-    
-#     def update(self, ir_readings, time_constant=1.0):
-#         if sum(ir_readings) >= 1:
-#             raw_value = 1.0
-#         else:
-#             raw_value = 0.0
-            
-#         self.update_level(raw_value, time_constant)
-#         if self.level > self.threshold:
-#             self.state = True
-#         elif self.level < 1 - self.threshold:
-#             self.state = False
-#         return self.state
-    
-#     def reset(self, level=0.0, state=False):
-#         """
-#         Reset the detector to initial values.
-
-#         Args:
-#             level (float): Initial level value
-#             state (bool): Initial state value
-#         """
-#         super().reset(level)
-#         self.state = state
-#         self.prev_side = None
         
-class PullThroughDetector(SensorEstimator):
-    """
-    Detector for identifying the end of a street.
+class StreetDetector:
+    def __init__(self, initial_level=0.0, threshold=0.63, time_constant=0.05):
+        self.threshold = threshold
+        self.time_constant = time_constant
+        self.level = initial_level
+        self.state = False
+        self.tlast = time.time()
 
-    This estimator detects when the robot has reached the end of a street
-    by monitoring the state of all line sensors and the robot's position
-    relative to the line. It uses a running average to filter out noise
-    and implements hysteresis to prevent rapid state changes.
-    """
-
-    def __init__(self, initial_level=0.0, initial_state=False, threshold=0.63):
+    def update(self, sensor_reading):
         """
-        Initialize the end-of-street detector.
-
+        Updates the detector with a new front IR sensor reading.
         Args:
-            initial_level (float): Initial level for the running average (0.0-1.0)
-            initial_state (bool): Initial state of the detector
-            threshold (float): Threshold for state changes (default 0.63, ~one time constant)
-        """
-        super().__init__(initial_level, threshold)
-        self.state = initial_state
-        # Keep track of previous side estimate to help determine if robot is off-center
-        self.prev_side = None
-
-    def update(self, ir_readings, side_state, time_constant=1.0):
-        """
-        Update the end-of-street detector with new IR readings and side state.
-
-        This method analyzes the pattern of sensor activations and the robot's
-        position relative to the line to determine if the robot has reached
-        the end of a street. It considers an end-of-street detected when all
-        sensors are inactive and the robot is centered.
-
-        Args:
-            ir_readings (tuple): Tuple of (left, middle, right) IR sensor readings
-            side_state (str): Current state from SideEstimator (LEFT, CENTER, RIGHT)
-            time_constant (float): Time constant for the detector (in seconds)
-
+            sensor_reading (bool or float): True (1.0) if line is detected, False (0.0) otherwise.
         Returns:
-            bool: True if end of street is detected, False otherwise
+            bool: Whether a street is detected in front.
         """
-
-        # Calculate raw value:
-        # 1.0 if we think it's the end of street, 0.0 otherwise
-        if all(reading == 0 for reading in ir_readings):
-            # All sensors read 0, but we need to check if we're centered
-            if side_state == SideEstimator.CENTER:
-                # Robot is centered with no line - likely end of street
-                raw_value = 1.0
-            else:
-                # Robot is off-center - likely pushed off the side
-                raw_value = 0.0
-        else:
-            # At least one sensor sees the line - not end of street
-            raw_value = 0.0
-
-        # Update the detector level
-        self.update_level(raw_value, time_constant)
-
-        # Store the current side state for next update
-        self.prev_side = side_state
-
+        raw_value = 1.0 if sensor_reading else 0.0
+        tnow = time.time()
+        dt = tnow - self.tlast
+        self.tlast = tnow
+        # Running average
+        self.level = self.level + dt / self.time_constant * (raw_value - self.level)
+        
         # Threshold with hysteresis
         if self.level > self.threshold:
             self.state = True
@@ -493,15 +424,3 @@ class PullThroughDetector(SensorEstimator):
             self.state = False
 
         return self.state
-
-    def reset(self, level=0.0, state=False):
-        """
-        Reset the detector to initial values.
-
-        Args:
-            level (float): Initial level value
-            state (bool): Initial state value
-        """
-        super().reset(level)
-        self.state = state
-        self.prev_side = None

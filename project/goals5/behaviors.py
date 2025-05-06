@@ -4,7 +4,7 @@ from sensor_estimation import (
     SideEstimator,
     EndOfStreetEstimator,
     NextStreetDetector,
-    PullThroughDetector
+    StreetDetector
 )
 from pose import getTurnAngle
 from config import (
@@ -131,20 +131,19 @@ class Behaviors:
             travel_time (float): Amount of time in seconds to pull forward.
                                Defaults to 0.5 seconds.
         """
-        pt_detector = PullThroughDetector()
-        side_estimator = SideEstimator()
+        street_detector = StreetDetector()
         t_0 = time.time()
         curr = time.time()
-        state = False
         while curr - t_0 <= travel_time:
-            ir_readings = self.sensors.read()
-            side = side_estimator.update(ir_readings, 0.05)
-            state = pt_detector.update(ir_readings, side)
             self.drive_system.drive(STRAIGHT)
             curr = time.time()
+            # This means that there is still road that the sensor is picking up
+            readings = 1.0 if sum(self.sensors.read()) >= 1.0 else 0.0
+            street_detector.update(readings)
         self.drive_system.stop()
-        print(f'Pull Through state: {not state}')
-        return not state
+        readings = 1.0 if sum(self.sensors.read()) >= 1.0 else 0.0
+        print(street_detector.update(readings))
+        return street_detector.update(readings)
 
     def line_follow(self):
         """
@@ -173,10 +172,10 @@ class Behaviors:
             if intersection_estimator.update(reading, 0.1):
                 curr = time.time()
                 # Then pull forward
-                self.pull_forward(travel_time=0.36)
+                road_state = self.pull_forward(travel_time=0.36)
 
-                # isUturn, travel time
-                return False, curr - t0
+                # isUturn, travel time, if road is ahead
+                return False, curr - t0, road_state
 
             # Estimate which side of the road the robot is on
             side = side_estimator.update(reading, 0.05)
@@ -184,15 +183,15 @@ class Behaviors:
 
             # Check for end of street
             if eos_estimator.update(reading, side, 0.09):
-                self.pull_forward(travel_time=0.6)
+                road_state = self.pull_forward(travel_time=0.6)
                 curr = time.time()
                 print("End of street detected!")
                 self.turn_to_next_street("left")
-                self.line_follow()
+                _, _, road_state = self.line_follow()
                 self.drive_system.stop()
 
-                # isUturn, travel time of street, one way
-                return True, curr - t0
+                # isUturn, travel time of street, if road is ahead from 
+                return True, curr - t0, road_state
 
             if reading == (0, 1, 0):
                 self.drive_system.drive(STRAIGHT)
