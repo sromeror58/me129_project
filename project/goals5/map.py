@@ -154,7 +154,7 @@ class Map:
         intersection.updateStreet(h1, STATUS.UNEXPLORED)
         self.plot(pose1)
 
-    def outcomeB(self, pose0, pose1):
+    def outcomeB(self, pose0, pose1, road_ahead=False):
         """
         Update intersection status for a straight movement from pose0 to pose1.
 
@@ -169,6 +169,11 @@ class Map:
         intersection.streets[pose0.heading] = STATUS.CONNECTED
         intersection = self.getintersection(pose1.x, pose1.y)
         intersection.streets[(pose1.heading + 4) % 8] = STATUS.CONNECTED
+        if road_ahead:
+            intersection.updateStreet(pose1.heading, STATUS.UNEXPLORED)
+        else:
+            intersection.updateStreet(pose1.heading, STATUS.NONEXISTENT)
+        # intersection.streets[pose1.heading] = STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
         self.plot(pose1)
 
     def outcomeC(self, pose0, pose1):

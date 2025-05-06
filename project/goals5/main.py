@@ -166,7 +166,7 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
             # Outcome B
             if not isUturn:
                 pose.calcmove()
-                map.outcomeB(pose0, pose)
+                map.outcomeB(pose0, pose, road_ahead)
             # Outcome C
             else:
                 pose.calcuturn()
