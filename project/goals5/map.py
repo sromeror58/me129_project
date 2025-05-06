@@ -28,6 +28,15 @@ def sortedInsert(list, node):
     return
 
 def distance(dx, dy):
+    """
+    Returns the movement cost based on direction.
+
+    Diagonal steps cost 1.4, and straight (N, S, E, W) steps cost 1.
+    
+    Args:
+            dx (int): Change in x-direction
+            dy (int): Change in y-direction
+    """
     if (dx, dy) in [(1,0), (0, 1), (-1, 0), (0, -1)]:
         return 1.4
     return 1
@@ -392,6 +401,13 @@ class Map:
             # Silently handle keyboard interrupts during cleanup
             pass
     def setstreet(self, xgoal, ygoal):
+        """
+        Finds the shortest path from every intersection to the goal at (xgoal, ygoal) (Dijkstra's).
+        
+        Args:
+            xgoal (int): X-coordinate of the goal intersection.
+            ygoal (int): Y-coordinate of the goal intersection.
+        """
         for intersection in self.intersections.values():
             intersection.cost = float('inf')
             intersection.direction = None

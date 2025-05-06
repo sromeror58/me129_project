@@ -86,6 +86,9 @@ def initialization_helper(behaviors, robot, heading, x, y):
     return {(x,y): initial_intersection}, heading
 
 def initialize_map():
+    """
+    Asks the user to load a map or create a new one, then returns the map and starting pose.
+    """
     choice = input("Load existing map? (y/n): ").strip().lower()
     if choice == 'y':
         filename = input("Enter filename (default: mymap.pickle): ").strip() or "mymap.pickle"
