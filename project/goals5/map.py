@@ -58,6 +58,12 @@ class STATUS(Enum):
     UNEXPLORED = 2
     DEADEND = 3
     CONNECTED = 4
+    
+
+class DIJKSTRA_STATE(Enum):
+    UNVISITED = 0     # Blue (already UNKNOWN)
+    ONDECK = 1      # Green
+    PROCESSED = 2     # Brown
 
 
 class Intersection:
@@ -80,6 +86,7 @@ class Intersection:
         self.y = y
         self.cost = float('inf')
         self.direction = None
+        self.dijkstra_state = DIJKSTRA_STATE.UNVISITED
         if streets is not None:
             self.streets = streets
         else:
@@ -206,7 +213,12 @@ class Map:
         intersection = self.getintersection(pose1.x, pose1.y)
         intersection.streets[(pose1.heading + 4) % 8] = STATUS.CONNECTED
         if road_ahead:
-            intersection.updateStreet(pose1.heading, STATUS.UNEXPLORED)
+            # checking if there is a road ahead and if there is a unexplored or connected 
+            # road within +- 45 degrees then we keep it as unexplored
+            if intersection.streets[(pose1.heading + 1) % 8] in [STATUS.UNEXPLORED, STATUS.CONNECTED] or intersection.streets[(pose1.heading + 1) % 8] in [STATUS.UNEXPLORED, STATUS.CONNECTED]:
+                intersection.updateStreet(pose1.heading, STATUS.NONEXISTENT)
+            else:
+                intersection.updateStreet(pose1.heading, STATUS.UNEXPLORED)
         else:
             intersection.updateStreet(pose1.heading, STATUS.NONEXISTENT)
         # intersection.streets[pose1.heading] = STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
@@ -308,7 +320,7 @@ class Map:
                 # Silently handle keyboard interrupts during plotting
                 pass
     
-    def plot(self):
+    def plot_no_robot(self):
         """
         Create a plot showing the current map state only (FOR DIJKSTRA's).
 
@@ -327,31 +339,24 @@ class Map:
             for y_grid in range(-3, 4):
                 plt.plot(x_grid, y_grid, color="lightgray", marker="o", markersize=8)
 
-        # Draw the intersections
         # Define colors for each status
-        status_colors = {
-            STATUS.UNKNOWN: "black",
-            STATUS.NONEXISTENT: "lightgray",
-            STATUS.UNEXPLORED: "blue",
-            STATUS.DEADEND: "red",
-            STATUS.CONNECTED: "green",
+        dijkstra_colors = {
+            DIJKSTRA_STATE.UNVISITED: "blue",
+            DIJKSTRA_STATE.PROCESSED: "saddlebrown",
+            DIJKSTRA_STATE.ONDECK: "green"
         }
 
-        # For each intersection in the map
-        for x_int, y_int in self.intersections:
-            # For each possible heading from that intersection
-            for h in range(8):
+        for (x_int, y_int), intersection in self.intersections.items():
+            color = dijkstra_colors.get(intersection.dijkstra_state)
+            plt.plot(x_int, y_int, color=color, marker="o", markersize=10)
+            optimal_heading = intersection.direction
+            if optimal_heading is not None:
                 # Get the direction vector for this heading
-                dx, dy = DX_DY_TABLE[h]
+                dx, dy = DX_DY_TABLE[optimal_heading]
                 dx *= 0.5
                 dy *= 0.5
-
-                # Get intersection status and corresponding color
-                status = self.getintersection(x_int, y_int).streets[h]
-                color = status_colors[status]
-
                 # Draw line from intersection halfway to next
-                plt.plot([x_int, x_int + dx], [y_int, y_int + dy], color=color)
+                plt.plot([x_int, x_int + dx], [y_int, y_int + dy], color='green')
 
         # If using TkAgg backend, display the plot
         if os.environ.get("display_map") == "on":
@@ -362,29 +367,31 @@ class Map:
                 # Silently handle keyboard interrupts during plotting
                 pass
 
-    def save_map(self, filename='mymap.pickle'):
+    def save_map(self, filename='mymap'):
         """
         Create the plot and save it to a file instead of displaying it.
 
         This method is useful for saving map visualizations to files for later review
         or for generating reports.
         """
-        self.plot(pose)
+        # self.plot(pose)
 
         # Instead of plt.pause(), save the figure to a file
-        # filename = f"plots/map_x{pose.x}_y{pose.y}_h{pose.heading}.pickle"
+        filename = f"plots/{filename}.pickle"
         print("Saving the map to %s..." % filename)
         with open (filename, 'wb') as file:
             pickle.dump(self, file)
         # plt.savefig(filename)
         print(f"Saved map to {filename}")
     
-    def load_map(self, filename="mymap.pickle"):
+    def load_map(self, filename="mymap"):
         # filename = f"plots/map_x{pose.x}_y{pose.y}_h{pose.heading}.pickle"
+        filename = f"plots/{filename}.pickle"
         print("Loading the map from %s..." % filename) 
         with open(filename, 'rb') as file:
             map = pickle.load(file)
         print(f"Loaded map")
+        return map
 
     def close(self):
         """
@@ -411,14 +418,17 @@ class Map:
         for intersection in self.intersections.values():
             intersection.cost = float('inf')
             intersection.direction = None
-        
+            intersection.dijkstra_state = DIJKSTRA_STATE.UNVISITED
+        self.plot_no_robot()
         # setting goal intersection cost to 0
         curr_intersection = self.getintersection(xgoal, ygoal)
         curr_intersection.setcost(0)
         queue = [curr_intersection]
         while len(queue) != 0:
             curr = queue.pop()
+            curr.dijkstra_state = DIJKSTRA_STATE.PROCESSED
             curr_cost = curr.cost
+            self.plot_no_robot()
             for heading in range(8):
                 if curr.streets[heading] != STATUS.CONNECTED:
                     continue
@@ -430,7 +440,11 @@ class Map:
                 if potential_cost < neighbor.cost:
                     neighbor.cost = potential_cost
                     neighbor.direction = (heading + 4) % 8
-                    sortedInsert(queue, neighbor)
+                    if neighbor.dijkstra_state != DIJKSTRA_STATE.ONDECK:
+                        neighbor.dijkstra_state = DIJKSTRA_STATE.ONDECK
+                        sortedInsert(queue, neighbor)
+                self.plot_no_robot()
+        print('Dijkstra\'s Complete')
         return 
         
         

@@ -119,7 +119,7 @@ class Behaviors:
         print(turnAngle1)
         return turnAngle1
 
-    def pull_forward(self, travel_time=0.5):
+    def pull_forward(self, travel_time=0.55):
         """
         Performs the pull forward behavior after detecting a valid intersection.
 

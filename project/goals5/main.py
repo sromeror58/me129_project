@@ -85,25 +85,25 @@ def initialization_helper(behaviors, robot, heading, x, y):
     initial_intersection = Intersection(x, y, current_streets)
     return {(x,y): initial_intersection}, heading
 
-def initialize_map():
+def initialize_map(behaviors, robot, heading, x, y):
     """
     Asks the user to load a map or create a new one, then returns the map and starting pose.
     """
     choice = input("Load existing map? (y/n): ").strip().lower()
     if choice == 'y':
-        filename = input("Enter filename (default: mymap.pickle): ").strip() or "mymap.pickle"
-        map_obj = Map.load_from_file(filename)
+        # only querying file name without extension (i.e. without .pickle at the end for simplicity)
+        filename = input("Enter filename (default: mymap.pickle): ").strip() or "mymap"
+        map_obj = Map.load_map(filename)
         x = int(input("Enter starting x-coordinate: "))
         y = int(input("Enter starting y-coordinate: "))
         heading = int(input("Enter starting heading (0–7): "))
-        pose = Pose(x=x, y=y, heading=heading)
+        pose = Pose(x, y, heading)
         return map_obj, pose
     else:
-        x = int(input("Enter starting x-coordinate: "))
-        y = int(input("Enter starting y-coordinate: "))
-        heading = int(input("Enter starting heading (0–7): "))
-        pose = Pose(x=x, y=y, heading=heading)
-        return Map(pose=pose), pose
+        intersection_dictionary, heading = initialization_helper(behaviors, robot, heading, x, y)
+        pose = Pose(x, y, heading)
+        map = Map(pose, intersection_dictionary)
+        return map, pose
         
     
 
@@ -124,14 +124,12 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
         y (float): Initial y-coordinate (default: 0.0)
         heading (int): Initial heading direction (0-7, default: 0)
     """
-    intersection_dictionary, heading = initialization_helper(behaviors, robot, heading, x, y)
-    pose = Pose(x, y, heading)
-    map = Map(pose, intersection_dictionary)
+    map, pose = initialize_map(behaviors, robot, heading, x, y)
     map.plot(pose)
 
     while True:
         try:
-            cmd = input("Enter command (s, l, r, q, p): ").strip().lower()
+            cmd = input("Enter command (s, l, r, q, p, d): ").strip().lower()
 
         except KeyboardInterrupt:
             robot.stop()
@@ -147,7 +145,7 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
         # Save plot
         elif cmd == "p":
             print("Saving plot...")
-            map.save_plot(pose)
+            map.save_map()
 
         ## OUTCOME A ##
         elif cmd == "l":
@@ -191,7 +189,21 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
             else:
                 pose.calcuturn()
                 map.outcomeC(pose0, pose)
-
+        ## PERFORMING DIJKSTRAS ##
+        elif cmd == "d":
+            try:
+                x = int(input("Enter goal x-coordinate: "))
+                y = int(input("Enter goal y-coordinate: "))
+            except KeyboardInterrupt:
+                robot.stop()
+                map.close()
+                break
+            if (x, y) not in map.intersections:
+                print(f'Invalid x-goal, y-goal coordinates. Quitting....')
+                robot.stop()
+                map.close()
+                break
+            map.setstreet(x, y)
         else:
             print("Invalid command...")
             continue
