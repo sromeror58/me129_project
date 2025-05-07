@@ -420,6 +420,12 @@ class Map:
             intersection.direction = None
             intersection.dijkstra_state = DIJKSTRA_STATE.UNVISITED
         self.plot_no_robot()
+        
+        # If coordinates are None, just reset the states and return
+        if xgoal is None or ygoal is None:
+            self.plot_no_robot()
+            return
+            
         # setting goal intersection cost to 0
         curr_intersection = self.getintersection(xgoal, ygoal)
         curr_intersection.setcost(0)

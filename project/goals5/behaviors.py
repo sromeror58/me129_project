@@ -172,7 +172,7 @@ class Behaviors:
             if intersection_estimator.update(reading, 0.1):
                 curr = time.time()
                 # Then pull forward
-                road_state = self.pull_forward(travel_time=0.36)
+                road_state = self.pull_forward(travel_time=0.38)
 
                 # isUturn, travel time, if road is ahead
                 return False, curr - t0, road_state
