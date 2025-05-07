@@ -172,7 +172,7 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
                 # Manual mode - get command from user
                 cmd = (
                     input(
-                        "Enter command (s=straight, l=left, r=right, g=set goal, c=cancel goal, q=quit, p=save): "
+                        "Enter command (s=straight, l=left, r=right, g=set goal, q=quit, p=save): "
                     )
                     .strip()
                     .lower()
@@ -191,18 +191,9 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
 
         # Save plot
         elif cmd == "p":
+            name = input("Name to save map to: ")
             print("Saving plot...")
-            map.save_map()
-
-        # Cancel current goal
-        elif cmd == "c":
-            if goal is not None:
-                print("Cancelling current goal and returning to manual mode.")
-                goal = None
-                map.setstreet(None, None)  # Clear optimal path tree
-                map.plot(pose)
-            else:
-                print("No active goal to cancel.")
+            map.save_map(filename=name)
 
         # Set goal
         elif cmd == "g":
