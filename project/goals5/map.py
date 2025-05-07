@@ -376,7 +376,7 @@ class Map:
                 # Silently handle keyboard interrupts during plotting
                 pass
 
-    def save_map(self, filename="mymap"):
+    def save_map(self, filename=""):
         """
         Create the plot and save it to a file instead of displaying it.
 
@@ -386,6 +386,8 @@ class Map:
         # self.plot(pose)
 
         # Instead of plt.pause(), save the figure to a file
+        if not filename:
+            filename = "mymap"
         filename = f"plots/{filename}.pickle"
         print("Saving the map to %s..." % filename)
         with open(filename, "wb") as file:
