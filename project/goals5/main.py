@@ -126,10 +126,43 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
     """
     map, pose = initialize_map(behaviors, robot, heading, x, y)
     map.plot(pose)
+    goal = None  # Track current goal coordinates
 
     while True:
         try:
-            cmd = input("Enter command (s, l, r, q, p, d): ").strip().lower()
+            # If we have a goal, check if we've reached it
+            if goal is not None:
+                if (pose.x, pose.y) == goal:
+                    print("Goal reached! Returning to manual mode.")
+                    goal = None
+                    map.setstreet(None, None)  # Clear optimal path tree
+                    map.plot(pose)
+                    continue
+
+                # Get current intersection and check optimal direction
+                current = map.getintersection(pose.x, pose.y)
+                if current.direction is not None:
+                    # If current heading doesn't match optimal direction, turn
+                    if pose.heading != current.direction:
+                        print(f"Turning to align with optimal direction {current.direction}")
+                        # Determine turn direction (left or right)
+                        turn_diff = (current.direction - pose.heading) % 8
+                        if turn_diff <= 4:
+                            cmd = "l"  # Turn left
+                        else:
+                            cmd = "r"  # Turn right
+                    else:
+                        print("Going straight along optimal path")
+                        cmd = "s"
+                else:
+                    print("No valid path to goal. Returning to manual mode.")
+                    goal = None
+                    map.setstreet(None, None)  # Clear optimal path tree
+                    map.plot(pose)
+                    continue
+            else:
+                # Manual mode - get command from user
+                cmd = input("Enter command (s=straight, l=left, r=right, g=set goal, c=cancel goal, q=quit, p=save): ").strip().lower()
 
         except KeyboardInterrupt:
             robot.stop()
@@ -146,6 +179,36 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
         elif cmd == "p":
             print("Saving plot...")
             map.save_map()
+
+        # Cancel current goal
+        elif cmd == "c":
+            if goal is not None:
+                print("Cancelling current goal and returning to manual mode.")
+                goal = None
+                map.setstreet(None, None)  # Clear optimal path tree
+                map.plot(pose)
+            else:
+                print("No active goal to cancel.")
+
+        # Set goal
+        elif cmd == "g":
+            try:
+                x = int(input("Enter goal x-coordinate: "))
+                y = int(input("Enter goal y-coordinate: "))
+                if (x, y) not in map.intersections:
+                    print(f'Invalid goal coordinates. Goal must be an explored intersection.')
+                    continue
+                goal = (x, y)
+                print(f"Setting goal to ({x}, {y})")
+                map.setstreet(x, y)
+                map.plot(pose)
+            except KeyboardInterrupt:
+                robot.stop()
+                map.close()
+                break
+            except ValueError:
+                print("Invalid input. Please enter integer coordinates.")
+                continue
 
         ## OUTCOME A ##
         elif cmd == "l":
@@ -189,24 +252,12 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
             else:
                 pose.calcuturn()
                 map.outcomeC(pose0, pose)
-        ## PERFORMING DIJKSTRAS ##
-        elif cmd == "d":
-            try:
-                x = int(input("Enter goal x-coordinate: "))
-                y = int(input("Enter goal y-coordinate: "))
-            except KeyboardInterrupt:
-                robot.stop()
-                map.close()
-                break
-            if (x, y) not in map.intersections:
-                print(f'Invalid x-goal, y-goal coordinates. Quitting....')
-                robot.stop()
-                map.close()
-                break
-            map.setstreet(x, y)
         else:
             print("Invalid command...")
             continue
+
+        # Update visualization after each action
+        map.plot(pose)
 
 
 def main_simple_brain():
