@@ -4,7 +4,7 @@ from sensor_estimation import (
     SideEstimator,
     EndOfStreetEstimator,
     NextStreetDetector,
-    StreetDetector
+    StreetDetector,
 )
 from pose import getTurnAngle
 from config import (
@@ -190,7 +190,7 @@ class Behaviors:
                 _, _, road_state = self.line_follow()
                 self.drive_system.stop()
 
-                # isUturn, travel time of street, if road is ahead from 
+                # isUturn, travel time of street, if road is ahead from
                 return True, curr - t0, road_state
 
             if reading == (0, 1, 0):

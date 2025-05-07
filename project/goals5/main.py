@@ -9,7 +9,6 @@ from behaviors import Behaviors
 from pose import Pose
 from magnetometer import ADC
 from map import Map, Intersection, STATUS
-import matplotlib
 
 
 class Robot:
@@ -52,6 +51,7 @@ class Robot:
         except Exception as e:
             print(f"Error stopping pigpio: {e}")
 
+
 def initialization_helper(behaviors, robot, heading, x, y):
     """
     Initializes the intersection at (x, y) with street status based on sensor data.
@@ -73,24 +73,29 @@ def initialization_helper(behaviors, robot, heading, x, y):
     current_streets = [STATUS.UNKNOWN] * 8
     if isUturn:
         # checking if we hit a u-turn meaning we have a deadend in that heading
-        # then we reach a intersection where we will make the intersection at 
+        # then we reach a intersection where we will make the intersection at
         current_streets[heading] = STATUS.DEADEND
         heading = (heading + 4) % 8
         # setting the street ahead of the intersection unexplored if the we have road_ahead
         # else we keep nonexistent (accounting the pull forward detector)
-        current_streets[heading] = STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
+        current_streets[heading] = (
+            STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
+        )
     else:
         # the case when we reach an intersection without a u-turn
-        current_streets[heading] = STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
+        current_streets[heading] = (
+            STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
+        )
     initial_intersection = Intersection(x, y, current_streets)
-    return {(x,y): initial_intersection}, heading
+    return {(x, y): initial_intersection}, heading
+
 
 def initialize_map(behaviors, robot, heading, x, y):
     """
     Asks the user to load a map or create a new one, then returns the map and starting pose.
     """
     choice = input("Load existing map? (y/n): ").strip().lower()
-    if choice == 'y':
+    if choice == "y":
         # only querying file name without extension (i.e. without .pickle at the end for simplicity)
         filename = input("Enter filename (default: mymap.pickle): ").strip() or "mymap"
         map_obj = Map.load_map(filename)
@@ -100,12 +105,13 @@ def initialize_map(behaviors, robot, heading, x, y):
         pose = Pose(x, y, heading)
         return map_obj, pose
     else:
-        intersection_dictionary, heading = initialization_helper(behaviors, robot, heading, x, y)
+        intersection_dictionary, heading = initialization_helper(
+            behaviors, robot, heading, x, y
+        )
         pose = Pose(x, y, heading)
         map = Map(pose, intersection_dictionary)
         return map, pose
-        
-    
+
 
 def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
     """
@@ -144,7 +150,9 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
                 if current.direction is not None:
                     # If current heading doesn't match optimal direction, turn
                     if pose.heading != current.direction:
-                        print(f"Turning to align with optimal direction {current.direction}")
+                        print(
+                            f"Turning to align with optimal direction {current.direction}"
+                        )
                         # Determine turn direction (left or right)
                         turn_diff = (current.direction - pose.heading) % 8
                         if turn_diff <= 4:
@@ -162,7 +170,13 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
                     continue
             else:
                 # Manual mode - get command from user
-                cmd = input("Enter command (s=straight, l=left, r=right, g=set goal, c=cancel goal, q=quit, p=save): ").strip().lower()
+                cmd = (
+                    input(
+                        "Enter command (s=straight, l=left, r=right, g=set goal, c=cancel goal, q=quit, p=save): "
+                    )
+                    .strip()
+                    .lower()
+                )
 
         except KeyboardInterrupt:
             robot.stop()
@@ -196,7 +210,9 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
                 x = int(input("Enter goal x-coordinate: "))
                 y = int(input("Enter goal y-coordinate: "))
                 if (x, y) not in map.intersections:
-                    print(f'Invalid goal coordinates. Goal must be an explored intersection.')
+                    print(
+                        "Invalid goal coordinates. Goal must be an explored intersection."
+                    )
                     continue
                 goal = (x, y)
                 print(f"Setting goal to ({x}, {y})")
@@ -308,7 +324,6 @@ def main_simple_brain():
     if args.display:
         os.environ["display_map"] = "on"
         print("Display map enabled - using TkAgg backend")
-        
 
     # Initialize the pigpio interface
     io = pigpio.pi()

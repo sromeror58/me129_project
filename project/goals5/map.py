@@ -20,26 +20,28 @@ def sortedInsert(list, node):
     # Scan through the list, comparing costs
     for i in range(len(list)):
         if list[i].cost > node.cost:
-        # Found the proper place to insert.
+            # Found the proper place to insert.
             list.insert(i, node)
             return
     # Nothing found, append at end.
     list.append(node)
     return
 
+
 def distance(dx, dy):
     """
     Returns the movement cost based on direction.
 
     Diagonal steps cost 1.4, and straight (N, S, E, W) steps cost 1.
-    
+
     Args:
             dx (int): Change in x-direction
             dy (int): Change in y-direction
     """
-    if (dx, dy) in [(1,0), (0, 1), (-1, 0), (0, -1)]:
+    if (dx, dy) in [(1, 0), (0, 1), (-1, 0), (0, -1)]:
         return 1.4
     return 1
+
 
 class STATUS(Enum):
     """
@@ -58,12 +60,12 @@ class STATUS(Enum):
     UNEXPLORED = 2
     DEADEND = 3
     CONNECTED = 4
-    
+
 
 class DIJKSTRA_STATE(Enum):
-    UNVISITED = 0     # Blue (already UNKNOWN)
-    ONDECK = 1      # Green
-    PROCESSED = 2     # Brown
+    UNVISITED = 0  # Blue (already UNKNOWN)
+    ONDECK = 1  # Green
+    PROCESSED = 2  # Brown
 
 
 class Intersection:
@@ -84,7 +86,7 @@ class Intersection:
         """
         self.x = x
         self.y = y
-        self.cost = float('inf')
+        self.cost = float("inf")
         self.direction = None
         self.dijkstra_state = DIJKSTRA_STATE.UNVISITED
         if streets is not None:
@@ -110,6 +112,7 @@ class Intersection:
         if self.streets[heading] not in [STATUS.UNKNOWN, STATUS.UNEXPLORED]:
             return
         self.streets[heading] = status
+
     def setcost(self, cost):
         self.cost = cost
 
@@ -213,9 +216,15 @@ class Map:
         intersection = self.getintersection(pose1.x, pose1.y)
         intersection.streets[(pose1.heading + 4) % 8] = STATUS.CONNECTED
         if road_ahead:
-            # checking if there is a road ahead and if there is a unexplored or connected 
+            # checking if there is a road ahead and if there is a unexplored or connected
             # road within +- 45 degrees then we keep it as unexplored
-            if intersection.streets[(pose1.heading + 1) % 8] in [STATUS.UNEXPLORED, STATUS.CONNECTED] or intersection.streets[(pose1.heading + 1) % 8] in [STATUS.UNEXPLORED, STATUS.CONNECTED]:
+            if intersection.streets[(pose1.heading + 1) % 8] in [
+                STATUS.UNEXPLORED,
+                STATUS.CONNECTED,
+            ] or intersection.streets[(pose1.heading + 1) % 8] in [
+                STATUS.UNEXPLORED,
+                STATUS.CONNECTED,
+            ]:
                 intersection.updateStreet(pose1.heading, STATUS.NONEXISTENT)
             else:
                 intersection.updateStreet(pose1.heading, STATUS.UNEXPLORED)
@@ -319,7 +328,7 @@ class Map:
             except KeyboardInterrupt:
                 # Silently handle keyboard interrupts during plotting
                 pass
-    
+
     def plot_no_robot(self):
         """
         Create a plot showing the current map state only (FOR DIJKSTRA's).
@@ -343,7 +352,7 @@ class Map:
         dijkstra_colors = {
             DIJKSTRA_STATE.UNVISITED: "blue",
             DIJKSTRA_STATE.PROCESSED: "saddlebrown",
-            DIJKSTRA_STATE.ONDECK: "green"
+            DIJKSTRA_STATE.ONDECK: "green",
         }
 
         for (x_int, y_int), intersection in self.intersections.items():
@@ -356,7 +365,7 @@ class Map:
                 dx *= 0.5
                 dy *= 0.5
                 # Draw line from intersection halfway to next
-                plt.plot([x_int, x_int + dx], [y_int, y_int + dy], color='green')
+                plt.plot([x_int, x_int + dx], [y_int, y_int + dy], color="green")
 
         # If using TkAgg backend, display the plot
         if os.environ.get("display_map") == "on":
@@ -367,7 +376,7 @@ class Map:
                 # Silently handle keyboard interrupts during plotting
                 pass
 
-    def save_map(self, filename='mymap'):
+    def save_map(self, filename="mymap"):
         """
         Create the plot and save it to a file instead of displaying it.
 
@@ -379,18 +388,18 @@ class Map:
         # Instead of plt.pause(), save the figure to a file
         filename = f"plots/{filename}.pickle"
         print("Saving the map to %s..." % filename)
-        with open (filename, 'wb') as file:
+        with open(filename, "wb") as file:
             pickle.dump(self, file)
         # plt.savefig(filename)
         print(f"Saved map to {filename}")
-    
+
     def load_map(self, filename="mymap"):
         # filename = f"plots/map_x{pose.x}_y{pose.y}_h{pose.heading}.pickle"
         filename = f"plots/{filename}.pickle"
-        print("Loading the map from %s..." % filename) 
-        with open(filename, 'rb') as file:
+        print("Loading the map from %s..." % filename)
+        with open(filename, "rb") as file:
             map = pickle.load(file)
-        print(f"Loaded map")
+        print("Loaded map")
         return map
 
     def close(self):
@@ -407,25 +416,26 @@ class Map:
         except KeyboardInterrupt:
             # Silently handle keyboard interrupts during cleanup
             pass
+
     def setstreet(self, xgoal, ygoal):
         """
         Finds the shortest path from every intersection to the goal at (xgoal, ygoal) (Dijkstra's).
-        
+
         Args:
             xgoal (int): X-coordinate of the goal intersection.
             ygoal (int): Y-coordinate of the goal intersection.
         """
         for intersection in self.intersections.values():
-            intersection.cost = float('inf')
+            intersection.cost = float("inf")
             intersection.direction = None
             intersection.dijkstra_state = DIJKSTRA_STATE.UNVISITED
         self.plot_no_robot()
-        
+
         # If coordinates are None, just reset the states and return
         if xgoal is None or ygoal is None:
             self.plot_no_robot()
             return
-            
+
         # setting goal intersection cost to 0
         curr_intersection = self.getintersection(xgoal, ygoal)
         curr_intersection.setcost(0)
@@ -439,10 +449,10 @@ class Map:
                 if curr.streets[heading] != STATUS.CONNECTED:
                     continue
                 dx, dy = DX_DY_TABLE[heading]
-                neighbor_x, neighbor_y = curr.x+dx, curr.y+dy
+                neighbor_x, neighbor_y = curr.x + dx, curr.y + dy
                 neighbor = self.getintersection(neighbor_x, neighbor_y)
                 potential_cost = curr_cost + distance(dx, dy)
-                
+
                 if potential_cost < neighbor.cost:
                     neighbor.cost = potential_cost
                     neighbor.direction = (heading + 4) % 8
@@ -450,7 +460,5 @@ class Map:
                         neighbor.dijkstra_state = DIJKSTRA_STATE.ONDECK
                         sortedInsert(queue, neighbor)
                 self.plot_no_robot()
-        print('Dijkstra\'s Complete')
-        return 
-        
-        
+        print("Dijkstra's Complete")
+        return

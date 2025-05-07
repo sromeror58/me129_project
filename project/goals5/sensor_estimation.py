@@ -393,7 +393,8 @@ class NextStreetDetector(SensorEstimator):
         self.looking_for_on_road = False
         self.found_next_street = False
         self.state = False
-        
+
+
 class StreetDetector:
     def __init__(self, initial_level=0.0, threshold=0.63, time_constant=0.05):
         self.threshold = threshold
@@ -416,7 +417,7 @@ class StreetDetector:
         self.tlast = tnow
         # Running average
         self.level = self.level + dt / self.time_constant * (raw_value - self.level)
-        
+
         # Threshold with hysteresis
         if self.level > self.threshold:
             self.state = True
