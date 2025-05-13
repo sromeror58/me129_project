@@ -396,7 +396,7 @@ class NextStreetDetector(SensorEstimator):
 
 
 class StreetDetector:
-    def __init__(self, initial_level=0.0, threshold=0.63, time_constant=0.05):
+    def __init__(self, initial_level=0.0, threshold=0.63, time_constant=0.41):
         self.threshold = threshold
         self.time_constant = time_constant
         self.level = initial_level

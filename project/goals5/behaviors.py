@@ -184,7 +184,6 @@ class Behaviors:
 
             # Check for end of street
             if eos_estimator.update(reading, side, 0.09):
-                road_state = self.pull_forward(travel_time=0.6)
                 curr = time.time()
                 print("End of street detected!")
                 self.turn_to_next_street("left")

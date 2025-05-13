@@ -37,12 +37,12 @@ class DriveSystem:
         "STEER_L": (0.62, 0.77),
         "TURN_L": (0.47, 0.79),
         "HOOK_L": (0.0, 0.8),
-        "SPIN_L": (-0.7, 0.65),
+        "SPIN_L": (-0.785, 0.735),
         "VEER_R": (0.79, 0.67),
         "STEER_R": (0.79, 0.60),
         "TURN_R": (0.82, 0.45),
         "HOOK_R": (0.83, 0),
-        "SPIN_R": (0.71, -0.69),
+        "SPIN_R": (0.715, -0.815),
     }
 
     def __init__(self, io):
@@ -65,7 +65,7 @@ class DriveSystem:
         self.motor1.stop()
         self.motor2.stop()
 
-    def drive(self, style: str):
+    def drive(self, style: str, backwards=False):
         """
         Drive the robot using a predefined driving style.
 
@@ -79,8 +79,12 @@ class DriveSystem:
         if style not in self.drive_styles:
             raise ValueError(f"Invalid drive style: {style}")
         drive_val = self.drive_styles[style]
-        self.motor1.setlevel(drive_val.level1)
-        self.motor2.setlevel(drive_val.level2)
+        if backwards:
+            self.motor1.setlevel(-1 * drive_val.level1)
+            self.motor2.setlevel(-1 * drive_val.level2)
+        else:
+            self.motor1.setlevel(drive_val.level1)
+            self.motor2.setlevel(drive_val.level2)
 
 
 if __name__ == "__main__":

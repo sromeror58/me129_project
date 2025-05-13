@@ -81,7 +81,7 @@ class Behaviors:
             reading = self.sensors.read()
 
             state, isTransition = next_street_detector.update(
-                reading, time_constant=0.085
+                reading, time_constant=0.055
             )
 
             if isTransition:
@@ -113,7 +113,7 @@ class Behaviors:
             if abs(turnAngle2 - turnAngle1) <= 90:
                 # Want to weight closer to turnAngle2 the larger the turn is: 0/5 to 4/5
                 x = abs(turnAngle1) / 360
-                weight = (3 * x**2 - 2 * x**3) / 1.1
+                weight = (3 * x**2 - 2 * x**3) / 1.2
                 turnAngle1 = (1 - weight) * turnAngle1 + (weight) * turnAngle2
 
         print(turnAngle1)
@@ -169,18 +169,18 @@ class Behaviors:
             reading = self.sensors.read()
 
             # Check for intersection
-            if intersection_estimator.update(reading, 0.1):
+            if intersection_estimator.update(reading, 0.12):
                 curr = time.time()
                 # Then pull forward
                 # road_state = self.pull_forward(travel_time=0.38)
-                road_state = self.pull_forward(travel_time=0.55)
+                road_state = self.pull_forward(travel_time=0.46)
 
                 # isUturn, travel time, if road is ahead
                 return False, curr - t0, road_state
 
             # Estimate which side of the road the robot is on
             side = side_estimator.update(reading, 0.05)
-            print(f"Road side: {side}")
+            # print(f"Road side: {side}")
 
             # Check for end of street
             if eos_estimator.update(reading, side, 0.09):

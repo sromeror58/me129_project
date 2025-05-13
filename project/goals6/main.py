@@ -1,4 +1,4 @@
-# Imports
+ # Imports
 import pigpio
 import traceback
 import os
@@ -137,6 +137,7 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
     map.plot(pose)
     goal = None  # Track current goal coordinates
     num_streets_to_goal = [0, []] # Track turns needed to get to goal
+    autonomous_mode = False
 
     while True:
         try:
@@ -167,7 +168,7 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
                             # Calculate the difference in heading turning left
                             heading_diff = (current.direction - current_heading) % 8
 
-                            if heading_diff <= 4:
+                            if heading_diff <= 5:
                                 num_streets_to_goal[0] = 1 # Left turns
                             else:
                                 num_streets_to_goal[0] = -1 # Right turns
@@ -192,11 +193,80 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
                     map.setstreet(None, None)  # Clear optimal path tree
                     map.plot(pose)
                     continue
+
+            elif autonomous_mode:
+                # In the process of making an accurate turn
+                if num_streets_to_goal[1]:
+                    if num_streets_to_goal[0] > 0:
+                        cmd = "l"  # Turn left
+                    else:
+                        cmd = "r"  # Turn right
+
+                else:
+                    # Get unexplored streets and find the one closest to current heading
+                    unexplored_streets = map.get_unexplored_streets(pose.x, pose.y)
+                    closest_heading = min(unexplored_streets, key=lambda x: min((x[0] - pose.heading) % 8, (pose.heading - x[0]) % 8))[0] if unexplored_streets else None
+                    print(unexplored_streets)
+                    print(closest_heading)
+
+
+                    if closest_heading is not None:
+                        if closest_heading == pose.heading:
+                            cmd = "s"
+
+                        else:
+                            # Local exploration - choose first unexplored street
+                            heading_diff = (closest_heading - pose.heading) % 8
+
+                            # Can we make an accurate turn?
+                            # If all the streets are known between the current heading and target heading, then we can make the turn more accurate
+                            # So (1) all the streets between current and target heading are NOT UNKNOWN, (2) target is UNEXPLORED and NOT UNKNOWN
+                            current_heading = pose.heading
+                            if heading_diff <= 5:
+                                num_streets_to_goal[0] = 1 # Left turns
+                            else:
+                                num_streets_to_goal[0] = -1 # Right turns
+                            # Check all streets between current heading and target heading
+                            current = map.getintersection(pose.x, pose.y)
+                            while current_heading != closest_heading:
+                                current_heading = (current_heading + num_streets_to_goal[0]) % 8
+                                # If any street is UNKNOWN, we can't make an accurate turn
+                                if current.streets[current_heading] == STATUS.UNKNOWN:
+                                    num_streets_to_goal[1] = [] # Clear the streets to encounter
+                                    break
+                                # Otherwise, if the street EXISTS, then we should take note of it
+                                elif current.streets[current_heading] != STATUS.NONEXISTENT:
+                                    num_streets_to_goal[1].append(current_heading)                    
+                            # Also verify target street is UNEXPLORED
+                            if current.streets[closest_heading] != STATUS.UNEXPLORED:
+                                num_streets_to_goal[1] = []
+
+                            # Now we can make an accurate turn, if it exists; otherwise, a less accurate turn
+                            if heading_diff <= 5:
+                                cmd = "l" 
+                            else:
+                                cmd = "r" 
+
+                    else:
+                        # No unexplored streets here, find nearest unexplored intersection
+                        nearest = map.find_nearest_unexplored(pose.x, pose.y)
+                        
+                        if nearest is None:
+                            print("Map fully explored! Returning to manual mode.")
+                            autonomous_mode = False
+                            continue
+                            
+                        # Set goal to nearest unexplored intersection
+                        goal = nearest
+                        map.setstreet(goal[0], goal[1])
+                        print(f"Setting goal to unexplored intersection at {goal}")
+                        continue  # Let the goal-directed navigation handle the movement
+
             else:
                 # Manual mode - get command from user
                 cmd = (
                     input(
-                        "Enter command (s=straight, l=left, r=right, g=set goal, q=quit, p=save): "
+                        "Enter command (s=straight, l=left, r=right, g=set goal, a=auto mode, q=quit, p=save): "
                     )
                     .strip()
                     .lower()
@@ -241,6 +311,12 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
                 print("Invalid input. Please enter integer coordinates.")
                 continue
 
+        # Toggle autonomous mode
+        elif cmd == "a":
+            autonomous_mode = not autonomous_mode
+            print(f"Autonomous mode {'enabled' if autonomous_mode else 'disabled'}")
+            continue
+
         ## OUTCOME A ##
         elif cmd == "l":
             # perform left turn
@@ -254,6 +330,13 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
                 pose.calcturn(turnAngle, True)
             else: # If turning without goal-following
                 pose.heading = num_streets_to_goal[1].pop(0)
+
+            # Check if there are streets existing to the +/- 45 already
+            intersection = map.getintersection(pose.x, pose.y)
+            street = intersection.streets[(pose.heading + 1) % 8] 
+            # Only adjust heading if the next closest street is already explored (CONNECTED or DEADEND)
+            if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                pose.heading = (pose.heading + 1) % 8
 
             map.outcomeA(pose0, pose, True)
 
@@ -270,12 +353,23 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
             else:
                 pose.heading = num_streets_to_goal[1].pop(0)
 
+            # Check if there are streets existing to the +/- 45 already
+            intersection = map.getintersection(pose.x, pose.y)
+            street = intersection.streets[(pose.heading - 1) % 8] 
+            # Only adjust heading if the next closest street is already explored (CONNECTED or DEADEND)
+            if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                pose.heading = (pose.heading - 1) % 8
+
             map.outcomeA(pose0, pose, False)
 
         ## OUTCOME B + C ##
         elif cmd == "s":
+            current = map.getintersection(pose.x, pose.y)
+            current_heading = pose.heading
+            if current.streets[current_heading] == STATUS.NONEXISTENT:
+                print("Cannot go straight: no street ahead!")
+                continue
             print("Going Straight")
-
             # Store current pose values before moving
             pose0 = pose.clone()
 
@@ -288,7 +382,7 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
             # Outcome C
             else:
                 pose.calcuturn()
-                map.outcomeC(pose0, pose)
+                map.outcomeC(pose0, pose, road_ahead)
         else:
             print("Invalid command...")
             continue

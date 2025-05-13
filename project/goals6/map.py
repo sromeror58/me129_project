@@ -55,11 +55,11 @@ class STATUS(Enum):
         CONNECTED: Street connects to another intersection
     """
 
-    UNKNOWN = 0
-    NONEXISTENT = 1
-    UNEXPLORED = 2
-    DEADEND = 3
-    CONNECTED = 4
+    UNKNOWN = 0 # black
+    NONEXISTENT = 1 # grey
+    UNEXPLORED = 2 # blue
+    DEADEND = 3 # red
+    CONNECTED = 4 # green
 
 
 class DIJKSTRA_STATE(Enum):
@@ -198,6 +198,8 @@ class Map:
                     intersection.updateStreet(h, STATUS.NONEXISTENT)
 
         intersection.updateStreet(h1, STATUS.UNEXPLORED)
+        intersection.updateStreet((h1 + 1) % 8, STATUS.NONEXISTENT)
+        intersection.updateStreet((h1 - 1) % 8, STATUS.NONEXISTENT)
         self.plot(pose1)
 
     def outcomeB(self, pose0, pose1, road_ahead=False):
@@ -218,22 +220,14 @@ class Map:
         if road_ahead:
             # checking if there is a road ahead and if there is a unexplored or connected
             # road within +- 45 degrees then we keep it as unexplored
-            if intersection.streets[(pose1.heading + 1) % 8] in [
-                STATUS.UNEXPLORED,
-                STATUS.CONNECTED,
-            ] or intersection.streets[(pose1.heading + 1) % 8] in [
-                STATUS.UNEXPLORED,
-                STATUS.CONNECTED,
-            ]:
-                intersection.updateStreet(pose1.heading, STATUS.NONEXISTENT)
-            else:
-                intersection.updateStreet(pose1.heading, STATUS.UNEXPLORED)
+            intersection.updateStreet((pose1.heading + 1) % 8, STATUS.NONEXISTENT)
+            intersection.updateStreet((pose1.heading - 1) % 8, STATUS.NONEXISTENT)
         else:
             intersection.updateStreet(pose1.heading, STATUS.NONEXISTENT)
         # intersection.streets[pose1.heading] = STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
         self.plot(pose1)
 
-    def outcomeC(self, pose0, pose1):
+    def outcomeC(self, pose0, pose1, road_ahead):
         """
         Update intersection status for a U-turn from pose0 to pose1.
 
@@ -246,6 +240,13 @@ class Map:
         """
         intersection = self.getintersection(pose0.x, pose0.y)
         intersection.streets[pose0.heading] = STATUS.DEADEND
+
+        intersection = self.getintersection(pose1.x, pose1.y)
+        if not road_ahead:
+            intersection.streets[pose1.heading] = STATUS.NONEXISTENT
+        if road_ahead:
+            intersection.updateStreet(pose1.heading, STATUS.UNEXPLORED)
+
         self.plot(pose1)
 
     def plot(self, pose):
@@ -431,11 +432,11 @@ class Map:
             intersection.cost = float("inf")
             intersection.direction = None
             intersection.dijkstra_state = DIJKSTRA_STATE.UNVISITED
-        self.plot_no_robot()
+        # self.plot_no_robot()
 
         # If coordinates are None, just reset the states and return
         if xgoal is None or ygoal is None:
-            self.plot_no_robot()
+            # self.plot_no_robot()
             return
 
         # setting goal intersection cost to 0
@@ -446,7 +447,7 @@ class Map:
             curr = queue.pop()
             curr.dijkstra_state = DIJKSTRA_STATE.PROCESSED
             curr_cost = curr.cost
-            self.plot_no_robot()
+            # self.plot_no_robot()
             for heading in range(8):
                 if curr.streets[heading] != STATUS.CONNECTED:
                     continue
@@ -461,6 +462,84 @@ class Map:
                     if neighbor.dijkstra_state != DIJKSTRA_STATE.ONDECK:
                         neighbor.dijkstra_state = DIJKSTRA_STATE.ONDECK
                         sortedInsert(queue, neighbor)
-                self.plot_no_robot()
+                # self.plot_no_robot()
         print("Dijkstra's Complete")
         return
+
+    def has_unexplored_streets(self, x, y):
+        """
+        Check if the intersection at (x,y) has any unexplored or unknown streets.
+        
+        Args:
+            x (int): X-coordinate of the intersection
+            y (int): Y-coordinate of the intersection
+            
+        Returns:
+            bool: True if there are unexplored streets, False otherwise
+        """
+        intersection = self.getintersection(x, y)
+        return any(status in [STATUS.UNKNOWN, STATUS.UNEXPLORED] for status in intersection.streets)
+
+    def get_unexplored_streets(self, x, y):
+        """
+        Get a list of headings with unexplored or unknown streets at the intersection.
+        
+        Args:
+            x (int): X-coordinate of the intersection
+            y (int): Y-coordinate of the intersection
+            
+        Returns:
+            tuple: (street heading, street status) for each unexplored street
+        """
+        intersection = self.getintersection(x, y)
+        return [(h, intersection.streets[h]) for h in range(8) if intersection.streets[h] in [STATUS.UNKNOWN, STATUS.UNEXPLORED]]
+
+    def find_nearest_unexplored(self, start_x, start_y):
+        """
+        Find the nearest intersection with unexplored streets using Dijkstra's algorithm.
+        Excludes the current intersection (start_x, start_y) from the search.
+        
+        Args:
+            start_x (int): Starting X-coordinate
+            start_y (int): Starting Y-coordinate
+            
+        Returns:
+            tuple: (x, y) coordinates of nearest unexplored intersection, or None if none found
+        """
+        # Reset all intersections
+        for intersection in self.intersections.values():
+            intersection.cost = float("inf")
+            intersection.direction = None
+            intersection.dijkstra_state = DIJKSTRA_STATE.UNVISITED
+
+        # Set start intersection cost to 0
+        start = self.getintersection(start_x, start_y)
+        start.setcost(0)
+        queue = [start]
+        
+        while queue:
+            curr = queue.pop(0)
+            curr.dijkstra_state = DIJKSTRA_STATE.PROCESSED
+            
+            # If this intersection has unexplored streets and it's not the start intersection
+            if (curr.x != start_x or curr.y != start_y) and self.has_unexplored_streets(curr.x, curr.y):
+                return curr.x, curr.y
+                
+            # Explore neighbors
+            for heading in range(8):
+                if curr.streets[heading] != STATUS.CONNECTED:
+                    continue
+                    
+                dx, dy = DX_DY_TABLE[heading]
+                neighbor_x, neighbor_y = curr.x + dx, curr.y + dy
+                neighbor = self.getintersection(neighbor_x, neighbor_y)
+                potential_cost = curr.cost + distance(dx, dy)
+                
+                if potential_cost < neighbor.cost:
+                    neighbor.cost = potential_cost
+                    neighbor.direction = (heading + 4) % 8
+                    if neighbor.dijkstra_state != DIJKSTRA_STATE.ONDECK:
+                        neighbor.dijkstra_state = DIJKSTRA_STATE.ONDECK
+                        sortedInsert(queue, neighbor)
+        
+        return None  # No unexplored intersections found
