@@ -1,6 +1,8 @@
 import pigpio
 from drive_system import DriveSystem
 from proximitysensor import ProximitySensor
+import traceback
+import time
 from config import (
     STRAIGHT,
     VEER_L,
@@ -13,24 +15,29 @@ from config import (
     HOOK_R,
     SPIN_L,
     SPIN_R,
+    MAX_THRESHOLD,
+    MIN_THRESHOLD,
+    NOMINIAL_DISTANCE
 )
 
-MAX_THRESHOLD = 0.2
-MIN_THRESHOLD = 0.1
 
 
-def heding_behavior(drive_system, sensors):
+def herding_behavior(drive_system, sensors):
     sensors.trigger()
     last_trigger_time = time.time()
     
     while True:
+        
         now = time.time()
-        if last_trigger_time - now > 0.05:
+        if now - last_trigger_time > 0.05:
             sensors.trigger()
             last_trigger_time = now
         
         left, middle, right = sensors.read()
         
+        if None in (left, middle, right):
+            print("Waiting for valid sensor readings...")
+            continue
         if left > MAX_THRESHOLD and middle > MAX_THRESHOLD and right > MAX_THRESHOLD:
             # GO STRAIGHT
             drive_system.drive(STRAIGHT)
@@ -60,13 +67,70 @@ def heding_behavior(drive_system, sensors):
             drive_system.drive(STRAIGHT, backwards=True)
         elif left > MAX_THRESHOLD and middle < MIN_THRESHOLD and right <= MAX_THRESHOLD:
             # GO BACKWARDS and STEER LEFT
-            drive_system.drive(TURN_L, backwards=True)
+            drive_system.drive(TURN_R, backwards=True)
         elif left <= MAX_THRESHOLD and middle < MIN_THRESHOLD and right > MAX_THRESHOLD:
             # go BACKWARDS and TURN RIGHT
-            drive_system.drive(TURN_R, backwards=True)
+            drive_system.drive(TURN_L, backwards=True)
         elif left <= MAX_THRESHOLD and middle < MIN_THRESHOLD and right <= MAX_THRESHOLD:
             # GO BACKWARDS
             drive_system.drive(STRAIGHT, backwards=True)
+
+def wall_following_behavior(drive_system, sensors):
+    sensors.trigger()
+    last_trigger_time = time.time()
+    direction =  (
+                input(
+                    "Enter direction of wall (l=left, r=right): "
+                )
+                .strip()
+                .lower()
+            )
+    while True:
+        now = time.time()
+        if now - last_trigger_time > 0.05:
+            sensors.trigger()
+            last_trigger_time = now
+
+        left, middle, right = sensors.read()
+        if None in (left, middle, right):
+            print("Waiting for valid sensor readings...")
+            continue
+        if direction == 'l':
+            error = left - NOMINIAL_DISTANCE
+            print(f"Left={left:.2f}, Error={error:.2f}")
+
+            if error > 0.1:
+                drive_system.stop()
+            elif error > 0.07:
+                drive_system.drive(STEER_L)
+            elif error > 0.03:
+                drive_system.drive(VEER_L)
+            elif error < -0.1:
+                drive_system.stop()
+            elif error < -0.07:
+                drive_system.drive(STEER_R)
+            elif error < -0.03:
+                drive_system.drive(VEER_R)
+            else:
+                drive_system.drive(STRAIGHT)
+        else:
+            error = right - NOMINIAL_DISTANCE
+            print(f"Right={right:.2f}, Error={error:.2f}")
+
+            if error > 0.1:
+                drive_system.stop()
+            elif error > 0.07:
+                drive_system.drive(STEER_R)
+            elif error > 0.03:
+                drive_system.drive(VEER_R)
+            elif error < -0.1:
+                drive_system.stop()
+            elif error < -0.07:
+                drive_system.drive(STEER_L)
+            elif error < -0.03:
+                drive_system.drive(VEER_L)
+            else:
+                drive_system.drive(STRAIGHT)
 
 if __name__ == "__main__":
     # Testing herding behavior
@@ -76,7 +140,7 @@ if __name__ == "__main__":
     sensors = ProximitySensor(io)
     ds = DriveSystem(io)
     try:
-        herding_behavior(ds, sensors)
+        wall_following_behavior(ds, sensors)
 
     except BaseException as e:
         ds.stop()

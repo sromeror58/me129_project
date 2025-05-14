@@ -39,8 +39,8 @@ def distance(dx, dy):
             dy (int): Change in y-direction
     """
     if (dx, dy) in [(1, 0), (0, 1), (-1, 0), (0, -1)]:
-        return 1.4
-    return 1
+        return 1
+    return 1.4
 
 
 class STATUS(Enum):
@@ -159,6 +159,41 @@ class Map:
             self.intersections[(x, y)] = Intersection(x, y)
         return self.intersections[(x, y)]
 
+    def four_roads_rule(self, pose):
+        """
+        We know that at each intersection, roads are necessarily separated by at least 90 degrees.
+        This means that if there are 3 roads so far at an intersection, if consecutive have >90 deg sep, then rest of roads do not exist.
+        """
+        intersection = self.getintersection(pose.x, pose.y)
+        
+        # Get all existing roads at this intersection
+        existing_roads = []
+        for heading in range(8):
+            if intersection.streets[heading] not in [STATUS.UNKNOWN, STATUS.NONEXISTENT]:
+                existing_roads.append(heading)
+        
+        # If we have 3 roads, check if any consecutive pair has >90 degree separation
+        if len(existing_roads) == 3:
+            # Sort roads by heading
+            existing_roads.sort()
+            
+            # Check each consecutive pair
+            for i in range(3):
+                road1 = existing_roads[i]
+                road2 = existing_roads[(i + 1) % 3]
+                
+                # Calculate minimum separation between roads
+                separation = min(abs(road2 - road1), 8 - abs(road2 - road1))
+                
+                # If separation > 2 (90 degrees), mark remaining directions as non-existent
+                if separation == 3:
+                    # Mark all other directions as non-existent
+                    for heading in range(8):
+                        if heading not in existing_roads:
+                            intersection.updateStreet(heading, STATUS.NONEXISTENT)
+
+                    print("FOUR ROADS RULE")
+
     def outcomeA(self, pose0, pose1, isLeft: bool):
         """
         Set streets to STATUS.NONEXISTENT based on the direction of turn from pose0 to pose1.
@@ -200,6 +235,9 @@ class Map:
         intersection.updateStreet(h1, STATUS.UNEXPLORED)
         intersection.updateStreet((h1 + 1) % 8, STATUS.NONEXISTENT)
         intersection.updateStreet((h1 - 1) % 8, STATUS.NONEXISTENT)
+        
+        self.four_roads_rule(pose1)
+
         self.plot(pose1)
 
     def outcomeB(self, pose0, pose1, road_ahead=False):
@@ -225,6 +263,9 @@ class Map:
         else:
             intersection.updateStreet(pose1.heading, STATUS.NONEXISTENT)
         # intersection.streets[pose1.heading] = STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
+
+        self.four_roads_rule(pose1)
+
         self.plot(pose1)
 
     def outcomeC(self, pose0, pose1, road_ahead):
@@ -246,6 +287,8 @@ class Map:
             intersection.streets[pose1.heading] = STATUS.NONEXISTENT
         if road_ahead:
             intersection.updateStreet(pose1.heading, STATUS.UNEXPLORED)
+
+        self.four_roads_rule(pose1)
 
         self.plot(pose1)
 
@@ -428,31 +471,45 @@ class Map:
             xgoal (int): X-coordinate of the goal intersection.
             ygoal (int): Y-coordinate of the goal intersection.
         """
+        # Reset all intersections
         for intersection in self.intersections.values():
             intersection.cost = float("inf")
             intersection.direction = None
             intersection.dijkstra_state = DIJKSTRA_STATE.UNVISITED
-        # self.plot_no_robot()
 
         # If coordinates are None, just reset the states and return
         if xgoal is None or ygoal is None:
-            # self.plot_no_robot()
+            return
+
+        # Check if goal intersection exists
+        if (xgoal, ygoal) not in self.intersections:
+            print(f"Warning: Goal intersection ({xgoal}, {ygoal}) does not exist in the map")
             return
 
         # setting goal intersection cost to 0
         curr_intersection = self.getintersection(xgoal, ygoal)
         curr_intersection.setcost(0)
         queue = [curr_intersection]
-        while len(queue) != 0:
-            curr = queue.pop()
+        
+        while queue:
+            curr = queue.pop(0)  # Get the lowest cost node
+            if curr.dijkstra_state == DIJKSTRA_STATE.PROCESSED:
+                continue  # Skip if already processed
+                
             curr.dijkstra_state = DIJKSTRA_STATE.PROCESSED
             curr_cost = curr.cost
-            # self.plot_no_robot()
+            
             for heading in range(8):
                 if curr.streets[heading] != STATUS.CONNECTED:
                     continue
+                    
                 dx, dy = DX_DY_TABLE[heading]
                 neighbor_x, neighbor_y = curr.x + dx, curr.y + dy
+                
+                # Check if neighbor exists in the map
+                if (neighbor_x, neighbor_y) not in self.intersections:
+                    continue
+                    
                 neighbor = self.getintersection(neighbor_x, neighbor_y)
                 potential_cost = curr_cost + distance(dx, dy)
 
@@ -462,7 +519,7 @@ class Map:
                     if neighbor.dijkstra_state != DIJKSTRA_STATE.ONDECK:
                         neighbor.dijkstra_state = DIJKSTRA_STATE.ONDECK
                         sortedInsert(queue, neighbor)
-                # self.plot_no_robot()
+                        
         print("Dijkstra's Complete")
         return
 
@@ -512,13 +569,21 @@ class Map:
             intersection.direction = None
             intersection.dijkstra_state = DIJKSTRA_STATE.UNVISITED
 
+        # Check if start intersection exists
+        if (start_x, start_y) not in self.intersections:
+            print(f"Warning: Start intersection ({start_x}, {start_y}) does not exist in the map")
+            return None
+
         # Set start intersection cost to 0
         start = self.getintersection(start_x, start_y)
         start.setcost(0)
         queue = [start]
         
         while queue:
-            curr = queue.pop(0)
+            curr = queue.pop()  # Get the lowest cost node (since queue is sorted)
+            if curr.dijkstra_state == DIJKSTRA_STATE.PROCESSED:
+                continue  # Skip if already processed
+                
             curr.dijkstra_state = DIJKSTRA_STATE.PROCESSED
             
             # If this intersection has unexplored streets and it's not the start intersection
@@ -532,6 +597,11 @@ class Map:
                     
                 dx, dy = DX_DY_TABLE[heading]
                 neighbor_x, neighbor_y = curr.x + dx, curr.y + dy
+                
+                # Check if neighbor exists in the map
+                if (neighbor_x, neighbor_y) not in self.intersections:
+                    continue
+                    
                 neighbor = self.getintersection(neighbor_x, neighbor_y)
                 potential_cost = curr.cost + distance(dx, dy)
                 

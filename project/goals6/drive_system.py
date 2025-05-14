@@ -32,17 +32,17 @@ class DriveSystem:
 
     # Predefined motor power levels for different driving styles
     DRIVE_STYLES = {
-        "STRAIGHT": (0.76, 0.719),
+        "STRAIGHT": (0.705, 0.79),
         "VEER_L": (0.73, 0.77),
         "STEER_L": (0.62, 0.77),
         "TURN_L": (0.47, 0.79),
         "HOOK_L": (0.0, 0.8),
-        "SPIN_L": (-0.785, 0.735),
+        "SPIN_L": (-0.79, 0.74),
         "VEER_R": (0.79, 0.67),
         "STEER_R": (0.79, 0.60),
         "TURN_R": (0.82, 0.45),
         "HOOK_R": (0.83, 0),
-        "SPIN_R": (0.715, -0.815),
+        "SPIN_R": (0.73, -0.83),
     }
 
     def __init__(self, io):
@@ -95,7 +95,7 @@ if __name__ == "__main__":
 
         # Create drive system and test a drive style
         ds = DriveSystem(io)
-        ds.drive("SPIN_R")
+        ds.drive("STRAIGHT")
         time.sleep(4)
         ds.stop()
 

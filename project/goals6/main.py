@@ -222,7 +222,7 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
                             # If all the streets are known between the current heading and target heading, then we can make the turn more accurate
                             # So (1) all the streets between current and target heading are NOT UNKNOWN, (2) target is UNEXPLORED and NOT UNKNOWN
                             current_heading = pose.heading
-                            if heading_diff <= 5:
+                            if heading_diff <= 4:
                                 num_streets_to_goal[0] = 1 # Left turns
                             else:
                                 num_streets_to_goal[0] = -1 # Right turns
@@ -331,12 +331,24 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
             else: # If turning without goal-following
                 pose.heading = num_streets_to_goal[1].pop(0)
 
-            # Check if there are streets existing to the +/- 45 already
             intersection = map.getintersection(pose.x, pose.y)
-            street = intersection.streets[(pose.heading + 1) % 8] 
-            # Only adjust heading if the next closest street is already explored (CONNECTED or DEADEND)
-            if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
-                pose.heading = (pose.heading + 1) % 8
+
+            turned_angle = abs(turnAngle)
+            dh = (pose.heading - pose0.heading) % 8
+            da_lower = (dh - 1) * 45
+            da_upper = (dh + 1) * 45
+
+            if abs(turned_angle - da_lower) < abs(turned_angle - da_upper):
+                street = intersection.streets[(pose.heading - 1) % 8] 
+                # Only adjust heading if the next closest street is already explored (CONNECTED or DEADEND)
+                if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                    pose.heading = (pose.heading - 1) % 8
+                    print("BINGAAAAA")
+            else:
+                street = intersection.streets[(pose.heading + 1) % 8] 
+                if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                    pose.heading = (pose.heading + 1) % 8
+                    print("BINGBBBBB")
 
             map.outcomeA(pose0, pose, True)
 
@@ -353,12 +365,24 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
             else:
                 pose.heading = num_streets_to_goal[1].pop(0)
 
-            # Check if there are streets existing to the +/- 45 already
             intersection = map.getintersection(pose.x, pose.y)
-            street = intersection.streets[(pose.heading - 1) % 8] 
-            # Only adjust heading if the next closest street is already explored (CONNECTED or DEADEND)
-            if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
-                pose.heading = (pose.heading - 1) % 8
+
+            turned_angle = abs(turnAngle)
+            dh = (pose0.heading - pose.heading) % 8
+            da_lower = (dh - 1) * 45
+            da_upper = (dh + 1) * 45
+
+            if abs(turned_angle - da_lower) < abs(turned_angle - da_upper):
+                street = intersection.streets[(pose.heading + 1) % 8] 
+                # Only adjust heading if the next closest street is already explored (CONNECTED or DEADEND)
+                if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                    pose.heading = (pose.heading + 1) % 8
+                    print("BINGAAAAA")
+            else:
+                street = intersection.streets[(pose.heading - 1) % 8] 
+                if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                    pose.heading = (pose.heading - 1) % 8
+                    print("BINGBBBBB")
 
             map.outcomeA(pose0, pose, False)
 

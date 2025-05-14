@@ -56,3 +56,8 @@ DX_DY_TABLE = [
     (1, 0),  # Heading 6: East
     (1, 1),  # Heading 7: Northeast
 ]
+
+# Ultrasound wall following behaviors constants
+MAX_THRESHOLD = 0.2
+MIN_THRESHOLD = 0.1
+NOMINIAL_DISTANCE = 0.3

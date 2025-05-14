@@ -81,7 +81,7 @@ class Behaviors:
             reading = self.sensors.read()
 
             state, isTransition = next_street_detector.update(
-                reading, time_constant=0.055
+                reading, time_constant=0.06
             )
 
             if isTransition:
@@ -173,7 +173,7 @@ class Behaviors:
                 curr = time.time()
                 # Then pull forward
                 # road_state = self.pull_forward(travel_time=0.38)
-                road_state = self.pull_forward(travel_time=0.46)
+                road_state = self.pull_forward(travel_time=0.4)
 
                 # isUturn, travel time, if road is ahead
                 return False, curr - t0, road_state
