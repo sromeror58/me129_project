@@ -162,7 +162,7 @@ class Map:
     def four_roads_rule(self, pose):
         """
         We know that at each intersection, roads are necessarily separated by at least 90 degrees.
-        This means that if there are 3 roads so far at an intersection, if consecutive have >90 deg sep, then rest of roads do not exist.
+        This means that if there are 3 roads so far at an intersection, if consecutive have 135 deg sep, then rest of unknown roads do not exist.
         """
         intersection = self.getintersection(pose.x, pose.y)
         
@@ -264,6 +264,8 @@ class Map:
             intersection.updateStreet(pose1.heading, STATUS.NONEXISTENT)
         # intersection.streets[pose1.heading] = STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
 
+        intersection.updateStreet((pose1.heading + 3) % 8, STATUS.NONEXISTENT)
+        intersection.updateStreet((pose1.heading + 5) % 8, STATUS.NONEXISTENT)
         self.four_roads_rule(pose1)
 
         self.plot(pose1)

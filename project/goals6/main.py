@@ -168,7 +168,7 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
                             # Calculate the difference in heading turning left
                             heading_diff = (current.direction - current_heading) % 8
 
-                            if heading_diff <= 5:
+                            if heading_diff <= 4:
                                 num_streets_to_goal[0] = 1 # Left turns
                             else:
                                 num_streets_to_goal[0] = -1 # Right turns
@@ -242,7 +242,7 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
                                 num_streets_to_goal[1] = []
 
                             # Now we can make an accurate turn, if it exists; otherwise, a less accurate turn
-                            if heading_diff <= 5:
+                            if heading_diff <= 4:
                                 cmd = "l" 
                             else:
                                 cmd = "r" 
@@ -338,17 +338,18 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
             da_lower = (dh - 1) * 45
             da_upper = (dh + 1) * 45
 
-            if abs(turned_angle - da_lower) < abs(turned_angle - da_upper):
-                street = intersection.streets[(pose.heading - 1) % 8] 
-                # Only adjust heading if the next closest street is already explored (CONNECTED or DEADEND)
-                if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
-                    pose.heading = (pose.heading - 1) % 8
-                    print("BINGAAAAA")
-            else:
-                street = intersection.streets[(pose.heading + 1) % 8] 
-                if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
-                    pose.heading = (pose.heading + 1) % 8
-                    print("BINGBBBBB")
+            if intersection.streets[pose.heading] == STATUS.NONEXISTENT:
+                if abs(turned_angle - da_lower) < abs(turned_angle - da_upper):
+                    street = intersection.streets[(pose.heading - 1) % 8] 
+                    # Only adjust heading if the next closest street is already explored (CONNECTED or DEADEND)
+                    if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                        pose.heading = (pose.heading - 1) % 8
+                        print("BINGAAAAA")
+                else:
+                    street = intersection.streets[(pose.heading + 1) % 8] 
+                    if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                        pose.heading = (pose.heading + 1) % 8
+                        print("BINGBBBBB")
 
             map.outcomeA(pose0, pose, True)
 
@@ -369,20 +370,22 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
 
             turned_angle = abs(turnAngle)
             dh = (pose0.heading - pose.heading) % 8
-            da_lower = (dh - 1) * 45
-            da_upper = (dh + 1) * 45
+            da_lower = (dh + 1) * 45
+            da_upper = (dh - 1) * 45
 
-            if abs(turned_angle - da_lower) < abs(turned_angle - da_upper):
-                street = intersection.streets[(pose.heading + 1) % 8] 
-                # Only adjust heading if the next closest street is already explored (CONNECTED or DEADEND)
-                if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
-                    pose.heading = (pose.heading + 1) % 8
-                    print("BINGAAAAA")
-            else:
-                street = intersection.streets[(pose.heading - 1) % 8] 
-                if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
-                    pose.heading = (pose.heading - 1) % 8
-                    print("BINGBBBBB")
+            if intersection.streets[pose.heading] == STATUS.NONEXISTENT:
+                if abs(turned_angle - da_lower) < abs(turned_angle - da_upper):
+                    street = intersection.streets[(pose.heading + 1) % 8] 
+                    # Only adjust heading if the next closest street is already explored (CONNECTED or DEADEND)
+                    if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                        pose.heading = (pose.heading + 1) % 8
+                        print("BINGAAAAA")
+                else:
+                    street = intersection.streets[(pose.heading - 1) % 8] 
+                    if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                        pose.heading = (pose.heading - 1) % 8
+                        print("BINGBBBBB")
+
 
             map.outcomeA(pose0, pose, False)
 

@@ -113,7 +113,7 @@ class Behaviors:
             if abs(turnAngle2 - turnAngle1) <= 90:
                 # Want to weight closer to turnAngle2 the larger the turn is: 0/5 to 4/5
                 x = abs(turnAngle1) / 360
-                weight = (3 * x**2 - 2 * x**3) / 1.2
+                weight = (3 * x**2 - 2 * x**3) / 1.15
                 turnAngle1 = (1 - weight) * turnAngle1 + (weight) * turnAngle2
 
         print(turnAngle1)
@@ -169,11 +169,11 @@ class Behaviors:
             reading = self.sensors.read()
 
             # Check for intersection
-            if intersection_estimator.update(reading, 0.12):
+            if intersection_estimator.update(reading, 0.11):
                 curr = time.time()
                 # Then pull forward
                 # road_state = self.pull_forward(travel_time=0.38)
-                road_state = self.pull_forward(travel_time=0.4)
+                road_state = self.pull_forward(travel_time=0.44)
 
                 # isUturn, travel time, if road is ahead
                 return False, curr - t0, road_state

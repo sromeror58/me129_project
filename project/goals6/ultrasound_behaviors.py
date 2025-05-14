@@ -19,8 +19,27 @@ from config import (
     MIN_THRESHOLD,
     NOMINIAL_DISTANCE
 )
+import numpy as np
 
-
+# pwm values for each motor when the wall is to the right of the robot
+l_pwm_vals = np.array([
+            0, 
+            DriveSystem.DRIVE_STYLES[STEER_L][0],
+            DriveSystem.DRIVE_STYLES[VEER_L][0],
+            DriveSystem.DRIVE_STYLES[STRAIGHT][0],
+            DriveSystem.DRIVE_STYLES[VEER_R][0],
+            DriveSystem.DRIVE_STYLES[STEER_R][0],
+            0
+        ])
+r_pwm_vals = np.array([
+            0, 
+            DriveSystem.DRIVE_STYLES[STEER_L][1],
+            DriveSystem.DRIVE_STYLES[VEER_L][1],
+            DriveSystem.DRIVE_STYLES[STRAIGHT][1],
+            DriveSystem.DRIVE_STYLES[VEER_R][1],
+            DriveSystem.DRIVE_STYLES[STEER_R][1],
+            0
+        ])
 
 def herding_behavior(drive_system, sensors):
     sensors.trigger()
@@ -95,10 +114,25 @@ def wall_following_behavior(drive_system, sensors):
         if None in (left, middle, right):
             print("Waiting for valid sensor readings...")
             continue
+
+        # Check for obstacles in front (middle sensor)
+        if middle < MIN_THRESHOLD:
+            print("Obstacle detected in front! Stopping...")
+            drive_system.stop()
+            continue
+
         if direction == 'l':
             error = left - NOMINIAL_DISTANCE
             print(f"Left={left:.2f}, Error={error:.2f}")
 
+            # Error bands for left wall following:
+            # |error| > 0.1m: Stop (safety)
+            # 0.07m < error <= 0.1m: Steer left
+            # 0.03m < error <= 0.07m: Veer left
+            # -0.03m <= error <= 0.03m: Go straight
+            # -0.07m <= error < -0.03m: Veer right
+            # -0.1m <= error < -0.07m: Steer right
+            # error < -0.1m: Stop (safety)
             if error > 0.1:
                 drive_system.stop()
             elif error > 0.07:
@@ -117,6 +151,14 @@ def wall_following_behavior(drive_system, sensors):
             error = right - NOMINIAL_DISTANCE
             print(f"Right={right:.2f}, Error={error:.2f}")
 
+            # Error bands for right wall following:
+            # |error| > 0.1m: Stop (safety)
+            # 0.07m < error <= 0.1m: Steer right
+            # 0.03m < error <= 0.07m: Veer right
+            # -0.03m <= error <= 0.03m: Go straight
+            # -0.07m <= error < -0.03m: Veer left
+            # -0.1m <= error < -0.07m: Steer left
+            # error < -0.1m: Stop (safety)
             if error > 0.1:
                 drive_system.stop()
             elif error > 0.07:
@@ -131,6 +173,71 @@ def wall_following_behavior(drive_system, sensors):
                 drive_system.drive(VEER_L)
             else:
                 drive_system.drive(STRAIGHT)
+    
+# def fit(direction):
+#     error_bands = np.array([-0.1, -0.07, -0.03, 0, 0.03, 0.07, 0.1])
+#     if direction == 'r':
+#         k_l, c_l = np.polyfit(error_bands, l_pwm_vals, 1)
+#         # print(f'c_l={c_l}, k_l={k_l}')
+#         k_r, c_r = np.polyfit(error_bands, r_pwm_vals, 1)
+#         # print(f'c_r={c_r}, k_r={k_r}')
+#         return c_l, k_l, c_r, k_r
+#     else:
+#         l_pwm_vals = l_pwm_vals[::-1]
+#         r_pwm_vals = r_pwm_vals[::-1]
+#         k_l, c_l = np.polyfit(error_bands, l_pwm_vals, 1)
+#         # print(f'c_l={c_l}, k_l={k_l}')
+#         k_r, c_r = np.polyfit(error_bands, r_pwm_vals, 1)
+#         # print(f'c_r={c_r}, k_r={k_r}')
+#         return c_l, k_l, c_r, k_r
+            
+def fit(direction):
+    error_bands = np.array([-0.1, -0.07, -0.03, 0, 0.03, 0.07, 0.1])
+    # Use local copies to avoid modifying global state or causing UnboundLocalError
+    l_vals = l_pwm_vals
+    r_vals = r_pwm_vals
+
+    if direction != 'r':
+        l_vals = l_vals[::-1]
+        r_vals = r_vals[::-1]
+
+    k_l, c_l = np.polyfit(error_bands, l_vals, 1)
+    k_r, c_r = np.polyfit(error_bands, r_vals, 1)
+    return c_l, k_l, c_r, k_r
+
+
+def wall_following_behavior_new(drive_system, sensors):
+    sensors.trigger()
+    last_trigger_time = time.time()
+    direction =  (
+                input(
+                    "Enter direction of wall (l=left, r=right): "
+                )
+                .strip()
+                .lower()
+            )
+    while True:
+        now = time.time()
+        if now - last_trigger_time > 0.05:
+            sensors.trigger()
+            last_trigger_time = now
+
+        left, middle, right = sensors.read()
+        if None in (left, middle, right):
+            print("Waiting for valid sensor readings...")
+            continue
+
+        # Check for obstacles in front (middle sensor)
+        if middle < MIN_THRESHOLD:
+            print("Obstacle detected in front! Stopping...")
+            drive_system.stop()
+            continue
+        error = left - NOMINIAL_DISTANCE if direction == 'l' else right - NOMINIAL_DISTANCE
+        print(f"Error={error:.2f}")
+        c_l, k_l, c_r, k_r = fit(direction)
+        pwm_l, pwm_r = c_l + error * k_l, c_r + error * k_r
+        drive_system.pwm(pwm_l, pwm_r)
+
 
 if __name__ == "__main__":
     # Testing herding behavior
@@ -140,7 +247,8 @@ if __name__ == "__main__":
     sensors = ProximitySensor(io)
     ds = DriveSystem(io)
     try:
-        wall_following_behavior(ds, sensors)
+        wall_following_behavior_new(ds, sensors)
+        # herding_behavior(ds, sensors)
 
     except BaseException as e:
         ds.stop()

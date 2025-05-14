@@ -32,17 +32,17 @@ class DriveSystem:
 
     # Predefined motor power levels for different driving styles
     DRIVE_STYLES = {
-        "STRAIGHT": (0.705, 0.79),
+        "STRAIGHT": (0.705, 0.78),
         "VEER_L": (0.73, 0.77),
         "STEER_L": (0.62, 0.77),
         "TURN_L": (0.47, 0.79),
         "HOOK_L": (0.0, 0.8),
-        "SPIN_L": (-0.79, 0.74),
+        "SPIN_L": (-0.81, 0.76),
         "VEER_R": (0.79, 0.67),
         "STEER_R": (0.79, 0.60),
         "TURN_R": (0.82, 0.45),
         "HOOK_R": (0.83, 0),
-        "SPIN_R": (0.73, -0.83),
+        "SPIN_R": (0.72, -0.82),
     }
 
     def __init__(self, io):
@@ -85,6 +85,11 @@ class DriveSystem:
         else:
             self.motor1.setlevel(drive_val.level1)
             self.motor2.setlevel(drive_val.level2)
+    
+    def pwm(self, pwm_l, pwm_r):
+        self.motor1.setlevel(pwm_l)
+        self.motor2.setlevel(pwm_r)
+        pass
 
 
 if __name__ == "__main__":
