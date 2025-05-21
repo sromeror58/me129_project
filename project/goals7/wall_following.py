@@ -23,7 +23,7 @@ from config import (
 )
 from ultrasound_behaviors import l_pwm_vals, r_pwm_vals, fit
 import numpy as np
-from ui import runui, SharedData
+from ui_wall_following import runui, SharedData
 import threading
 
 def main():
