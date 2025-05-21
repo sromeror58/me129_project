@@ -17,7 +17,8 @@ from config import (
     SPIN_R,
     MAX_THRESHOLD,
     MIN_THRESHOLD,
-    NOMINIAL_DISTANCE
+    NOMINIAL_DISTANCE,
+    PWM_CONST
 )
 import numpy as np
 
@@ -42,11 +43,16 @@ r_pwm_vals = np.array([
         ])
 
 def herding_behavior(drive_system, sensors):
+    """
+    Controls robot to navigate by reacting to sensor readings.
+
+    Args:
+        drive_system: Manages robot's movement.
+        sensors: Provides distance readings (left, middle, right).
+    """
     sensors.trigger()
     last_trigger_time = time.time()
-    
     while True:
-        
         now = time.time()
         if now - last_trigger_time > 0.05:
             sensors.trigger()
@@ -95,6 +101,13 @@ def herding_behavior(drive_system, sensors):
             drive_system.drive(STRAIGHT, backwards=True)
 
 def wall_following_behavior(drive_system, sensors):
+    """
+    Enables robot to follow a wall using error-based control.
+
+    Args:
+        drive_system: Manages robot's movement.
+        sensors: Provides distance readings (left, middle, right).
+    """
     sensors.trigger()
     last_trigger_time = time.time()
     direction =  (
@@ -173,25 +186,17 @@ def wall_following_behavior(drive_system, sensors):
                 drive_system.drive(VEER_L)
             else:
                 drive_system.drive(STRAIGHT)
-    
-# def fit(direction):
-#     error_bands = np.array([-0.1, -0.07, -0.03, 0, 0.03, 0.07, 0.1])
-#     if direction == 'r':
-#         k_l, c_l = np.polyfit(error_bands, l_pwm_vals, 1)
-#         # print(f'c_l={c_l}, k_l={k_l}')
-#         k_r, c_r = np.polyfit(error_bands, r_pwm_vals, 1)
-#         # print(f'c_r={c_r}, k_r={k_r}')
-#         return c_l, k_l, c_r, k_r
-#     else:
-#         l_pwm_vals = l_pwm_vals[::-1]
-#         r_pwm_vals = r_pwm_vals[::-1]
-#         k_l, c_l = np.polyfit(error_bands, l_pwm_vals, 1)
-#         # print(f'c_l={c_l}, k_l={k_l}')
-#         k_r, c_r = np.polyfit(error_bands, r_pwm_vals, 1)
-#         # print(f'c_r={c_r}, k_r={k_r}')
-#         return c_l, k_l, c_r, k_r
             
 def fit(direction):
+    """
+    Calculates linear regression coefficients for motor PWM.
+
+    Args:
+        direction (str): 'l' for left wall, 'r' for right wall.
+
+    Returns:
+        tuple: (c_l, k_l, c_r, k_r) - intercepts and slopes for left/right motors.
+    """
     error_bands = np.array([-0.1, -0.07, -0.03, 0, 0.03, 0.07, 0.1])
     # Use local copies to avoid modifying global state or causing UnboundLocalError
     l_vals = l_pwm_vals
@@ -203,10 +208,18 @@ def fit(direction):
 
     k_l, c_l = np.polyfit(error_bands, l_vals, 1)
     k_r, c_r = np.polyfit(error_bands, r_vals, 1)
+    print(f'c_l={c_l}, k_l={k_l}, c_r={c_r}, k_r={k_r}')
     return c_l, k_l, c_r, k_r
 
 
 def wall_following_behavior_new(drive_system, sensors):
+    """
+    Implements advanced wall-following using linear regression for PWM control.
+
+    Args:
+        drive_system: DriveSystem object.
+        sensors: IR sensors.
+    """
     sensors.trigger()
     last_trigger_time = time.time()
     direction =  (
@@ -235,12 +248,12 @@ def wall_following_behavior_new(drive_system, sensors):
         error = left - NOMINIAL_DISTANCE if direction == 'l' else right - NOMINIAL_DISTANCE
         print(f"Error={error:.2f}")
         c_l, k_l, c_r, k_r = fit(direction)
-        pwm_l, pwm_r = c_l + error * k_l, c_r + error * k_r
+        pwm_l, pwm_r = PWM_CONST * (c_l + error * k_l), PWM_CONST * (c_r + error * k_r)
         drive_system.pwm(pwm_l, pwm_r)
 
 
 if __name__ == "__main__":
-    # Testing herding behavior
+    # Testing herding/wall following behavior
     io = pigpio.pi()
 
     # Create drive system and sensors
@@ -255,6 +268,3 @@ if __name__ == "__main__":
         io.stop()
         print("Ending due to exception: %s" % repr(e))
         traceback.print_exc()
-    
-            
-        
