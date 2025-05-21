@@ -3,6 +3,7 @@ import traceback
 import time
 from motor import Motor
 from config import PIN_MOTOR1_LEGA, PIN_MOTOR1_LEGB, PIN_MOTOR2_LEGA, PIN_MOTOR2_LEGB
+import numpy as np
 
 
 class DriveValues:
@@ -32,7 +33,7 @@ class DriveSystem:
 
     # Predefined motor power levels for different driving styles
     DRIVE_STYLES = {
-        "STRAIGHT": (0.705, 0.78),
+        "STRAIGHT": (0.685, 0.76),
         "VEER_L": (0.73, 0.77),
         "STEER_L": (0.62, 0.77),
         "TURN_L": (0.47, 0.79),
@@ -91,6 +92,19 @@ class DriveSystem:
         self.motor2.setlevel(pwm_r)
         pass
 
+def turn_fit(turn_time):
+    turn_angles = [45, 45, 90, 90, 135, 135, 180, 180] # [l,r,l,r,...]
+    turn_times = [0.47726893424987793, 
+                  0.4842534065246582,
+                  0.7136805057525635,
+                  0.7676517963409424,
+                  1.0520856380462646,
+                  1.1772491931915283,
+                  1.4367907047271729,
+                  1.4296939373016357]
+    m, b = np.polyfit(turn_times, turn_angles, 1)
+    return m * turn_time + b
+    # pass
 
 if __name__ == "__main__":
     # Testing different drive modes

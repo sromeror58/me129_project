@@ -35,10 +35,12 @@ class Behaviors:
             drive_system: The robot's drive system for motor control
             sensors: The robot's sensors for environmental perception
             adc: The analog-to-digital converter for magnetometer readings
+            proximity_sensor: The robot's proximity sensor for obstacle detection
         """
         self.drive_system = drive_system
         self.sensors = sensors
         self.adc = adc
+        # self.proximity_sensor = proximity_sensor
 
     def turn_to_next_street(self, direction):
         """
@@ -144,6 +146,25 @@ class Behaviors:
         readings = 1.0 if sum(self.sensors.read()) >= 1.0 else 0.0
         print(street_detector.update(readings))
         return street_detector.update(readings)
+
+    def check_ahead(self):
+        """
+        Checks if the street ahead is blocked using the front-facing ultrasound sensor.
+        A street is considered blocked if there is an obstacle within 70cm.
+
+        Returns:
+            bool: True if the street ahead is blocked, False otherwise
+        """
+        # Read the middle (front-facing) ultrasound sensor
+        _, middle_distance, _ = self.proximity_sensor.read()
+        
+        # If no reading or reading is too close, consider it blocked
+        if middle_distance is None or middle_distance < 0.0:  # 70cm threshold
+            print(f"Street ahead is blocked! Distance: {middle_distance}m")
+            return True
+            
+        print(f"Street ahead is clear. Distance: {middle_distance}m")
+        return False
 
     def line_follow(self):
         """
