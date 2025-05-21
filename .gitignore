@@ -57,6 +57,10 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+*.pickle
+*.png
+
+
 
 # Ignore other generated docs
 *.dox
