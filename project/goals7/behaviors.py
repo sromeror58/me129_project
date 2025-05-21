@@ -27,7 +27,7 @@ class Behaviors:
     the drive system, sensors, and magnetometer to implement these behaviors.
     """
 
-    def __init__(self, drive_system, sensors, adc):
+    def __init__(self, drive_system, sensors, adc, proximity_sensor):
         """
         Initialize the Behaviors class with the necessary components.
 
@@ -40,7 +40,7 @@ class Behaviors:
         self.drive_system = drive_system
         self.sensors = sensors
         self.adc = adc
-        # self.proximity_sensor = proximity_sensor
+        self.proximity_sensor = proximity_sensor
 
     def turn_to_next_street(self, direction):
         """
@@ -147,7 +147,7 @@ class Behaviors:
         print(street_detector.update(readings))
         return street_detector.update(readings)
 
-    def check_ahead(self):
+    def check_blockage(self):
         """
         Checks if the street ahead is blocked using the front-facing ultrasound sensor.
         A street is considered blocked if there is an obstacle within 70cm.
@@ -159,7 +159,7 @@ class Behaviors:
         _, middle_distance, _ = self.proximity_sensor.read()
         
         # If no reading or reading is too close, consider it blocked
-        if middle_distance is None or middle_distance < 0.0:  # 70cm threshold
+        if middle_distance is None or middle_distance < 0.7:  
             print(f"Street ahead is blocked! Distance: {middle_distance}m")
             return True
             

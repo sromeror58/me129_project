@@ -33,7 +33,7 @@ class DriveSystem:
 
     # Predefined motor power levels for different driving styles
     DRIVE_STYLES = {
-        "STRAIGHT": (0.685, 0.76),
+        "STRAIGHT": (0.655, 0.73),
         "VEER_L": (0.73, 0.77),
         "STEER_L": (0.62, 0.77),
         "TURN_L": (0.47, 0.79),
@@ -102,8 +102,8 @@ def turn_fit(turn_time):
                   1.1772491931915283,
                   1.4367907047271729,
                   1.4296939373016357]
-    m, b = np.polyfit(turn_times, turn_angles, 1)
-    return m * turn_time + b
+    a, b, c = np.polyfit(turn_times, turn_angles, 2)
+    return a * turn_time**2 + b * turn_time + c
     # pass
 
 if __name__ == "__main__":

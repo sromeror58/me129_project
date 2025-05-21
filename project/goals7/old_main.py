@@ -10,7 +10,7 @@ from pose import Pose
 from magnetometer import ADC
 from map import Map, Intersection, STATUS
 import time
-
+from proximitysensor import ProximitySensor
 
 class Robot:
     """
@@ -117,15 +117,20 @@ def initialize_map(behaviors, robot, heading, x, y):
         return map, pose
 
 
-def choose_best_angle(time_estimate, mag_estimate, heading_offsets):
-    weight_time = 0.65
-    weight_mag = 0.35
-    fused = weight_time * time_estimate + weight_mag * mag_estimate
-
-    best_offset = min(heading_offsets, key=lambda offset: abs(fused - offset * 45))
+def choose_best_angle(time_estimate, mag_estimate, headings):
+    weight_time = 0.4
+    weight_mag = 0.6
+    if abs(mag_estimate) <= 180 or abs(time_estimate) <= 180:
+        weight_time = 0.7
+        weight_mag = 0.3
+    weighted_average = weight_time * time_estimate + weight_mag * mag_estimate
+    print(weighted_average)
+    # weighted_average = (weight_time * time_estimate + weight_mag * mag_estimate) % 360
+    best_offset = min(headings, key=lambda head: abs(weighted_average - head * 45))
     best_angle = best_offset * 45
     print(best_angle, best_offset)
     return best_angle, best_offset
+
 
 
 
@@ -390,20 +395,22 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
             pose0 = pose.clone()
             # returning the turn angle and turn time
             turnAngle, turn_time = behaviors.turn_to_next_street("right")
-            time_turn_estimate = turn_fit(turn_time)
+            time_turn_estimate = -1 * turn_fit(turn_time)
             # print(f'time turn estimate: {time_turn_estimate} degrees')
-            print(f'Turn time: {turn_time}\t time-based turn:{-1*time_turn_estimate}\t mag-based turn:{turnAngle}\t list of angles:{possible_headings}')
-            chosen_angle, chosen_offset = choose_best_angle(-1*time_turn_estimate, turnAngle, possible_headings)
+            print(f'Turn time: {turn_time}\t time-based turn:{time_turn_estimate}\t mag-based turn:{turnAngle}\t list of angles:{possible_headings}')
+            chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, possible_headings)
             print(f'Chosen angle: {chosen_angle}')
             if not num_streets_to_goal[1]:
                 # pose.calcturn(turnAngle, False)
-                pose.calcturn(chosen_angle, True)
+                print(-1 * chosen_angle)
+                pose.calcturn(-1 * chosen_angle, True)
             else:
                 pose.heading = num_streets_to_goal[1].pop(0)
 
             intersection = map.getintersection(pose.x, pose.y)
 
             # turned_angle = abs(turnAngle)
+            
             turned_angle = abs(chosen_angle)
             dh = (pose0.heading - pose.heading) % 8
             da_lower = (dh + 1) * 45
@@ -512,8 +519,9 @@ def main_simple_brain():
     drive_system = DriveSystem(io)
     sensors = LineSensor(io)
     adc = ADC(io)
+    proximity_sensor = ProximitySensor(io)
 
-    behaviors = Behaviors(drive_system, sensors, adc)
+    behaviors = Behaviors(drive_system, sensors, adc, proximity_sensor)
 
     try:
         # Create a map instance and pass it to simple_brain

@@ -60,6 +60,7 @@ class STATUS(Enum):
     UNEXPLORED = 2 # blue
     DEADEND = 3 # red
     CONNECTED = 4 # green
+    BLOCKED = 5 # yellow
 
 
 class DIJKSTRA_STATE(Enum):
@@ -109,6 +110,9 @@ class Intersection:
             heading (int): Direction of the street (0-7)
             status (STATUS): New status to set for the street
         """
+        if status == STATUS.BLOCKED:
+            self.streets[heading] = STATUS.BLOCKED
+            return
         if self.streets[heading] not in [STATUS.UNKNOWN, STATUS.UNEXPLORED]:
             return
         self.streets[heading] = status
@@ -143,6 +147,23 @@ class Map:
         if pose is None:
             pose = Pose()
         self.getintersection(pose.x, pose.y)
+
+    def check_and_set_blocked(self, pose, is_blocked = False):
+        intersection = self.getintersection(pose.x, pose.y)
+        h = pose.heading
+        dx, dy = DX_DY_TABLE[h]
+        next_x, next_y = pose.x + dx, pose.y + dy
+
+        if (next_x, next_y) in self.intersections:
+            next_intersection = self.getintersection(next_x, next_y)
+            opposite_heading = (h + 4) % 8
+            if is_blocked:
+                intersection.updateStreet(h, STATUS.BLOCKED)
+                if next_intersection.streets[opposite_heading] not in [STATUS.UNKNOWN, STATUS.UNEXPLORED]:
+                    next_intersection.updateStreet(opposite_heading, STATUS.BLOCKED)
+            if next_intersection.streets[opposite_heading] == STATUS.BLOCKED:
+                intersection.updateStreet(h, STATUS.BLOCKED)
+            
 
     def getintersection(self, x, y):
         """
@@ -238,7 +259,6 @@ class Map:
         
         self.four_roads_rule(pose1)
 
-        self.plot(pose1)
 
     def outcomeB(self, pose0, pose1, road_ahead=False):
         """
@@ -268,7 +288,6 @@ class Map:
         intersection.updateStreet((pose1.heading + 5) % 8, STATUS.NONEXISTENT)
         self.four_roads_rule(pose1)
 
-        self.plot(pose1)
 
     def outcomeC(self, pose0, pose1, road_ahead):
         """
@@ -292,7 +311,6 @@ class Map:
 
         self.four_roads_rule(pose1)
 
-        self.plot(pose1)
 
     def plot(self, pose):
         """
@@ -348,6 +366,7 @@ class Map:
             STATUS.UNEXPLORED: "blue",
             STATUS.DEADEND: "red",
             STATUS.CONNECTED: "green",
+            STATUS.BLOCKED: "yellow"
         }
 
         # For each intersection in the map

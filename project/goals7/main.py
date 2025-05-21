@@ -2,12 +2,13 @@ import pigpio
 import traceback
 import os
 import argparse
-import copy  # Add this import
+import copy 
 from drive_system import DriveSystem
 from sensor import LineSensor
 from behaviors import Behaviors
 from pose import Pose
 from magnetometer import ADC
+from proximitysensor import ProximitySensor
 from map import Map, Intersection, STATUS
 import time
 import threading
@@ -103,10 +104,9 @@ def runrobot(shared: SharedData, behaviors: Behaviors, robot_hardware: Robot, in
     print(f"Robot thread: Initializing with pose ({initial_x}, {initial_y}, {initial_heading})")
     current_pose = Pose(initial_x, initial_y, initial_heading)
     
-    # Initialize the first intersection using initialization_helper
     print("Robot thread: Initializing first intersection...")
     initial_intersections, updated_heading = initialization_helper(behaviors, robot_hardware, initial_heading, initial_x, initial_y)
-    current_pose.heading = updated_heading  # Update heading based on initialization
+    current_pose.heading = updated_heading  
     
     map_obj = Map(current_pose, initial_intersections)
     # Initialize shared.map after map_obj is created
@@ -122,8 +122,8 @@ def runrobot(shared: SharedData, behaviors: Behaviors, robot_hardware: Robot, in
     running = True
     
     # To store the mode before pausing, to allow resume to correct mode
-    previous_autonomous_mode_before_pause = 1 # Default to explore if paused without prior auto mode
-    has_printed_pause_message = False # For printing pause message only once
+    previous_autonomous_mode_before_pause = 1 
+    has_printed_pause_message = False 
 
     try:
         while running:
@@ -133,7 +133,7 @@ def runrobot(shared: SharedData, behaviors: Behaviors, robot_hardware: Robot, in
             local_map_filename = None
             local_ui_pose_update = None
             local_step_mode = False
-            local_map = None # Will hold a deepcopy of shared.map for this iteration's logic
+            local_map = None 
             
             if shared.acquire():
                 try:
@@ -146,7 +146,7 @@ def runrobot(shared: SharedData, behaviors: Behaviors, robot_hardware: Robot, in
                     local_map_filename = shared.map_filename
                     # map_filename is consumed after use by specific commands
 
-                    local_ui_pose_update = shared.pose # UI might have set this
+                    local_ui_pose_update = shared.pose 
                     
                     local_step_mode = shared.step_mode
                     # step_mode is NOT consumed here by robot thread; UI thread resets it or robot thread consumes it when stepping
@@ -158,16 +158,9 @@ def runrobot(shared: SharedData, behaviors: Behaviors, robot_hardware: Robot, in
                     # Ensure map_obj (robot's working copy) is updated if shared.map was changed by UI (e.g. load)
                     if shared.map is not None:
                         if map_obj is None or id(map_obj) != id(shared.map): # Check if shared.map is a new instance
-                             # This condition might be tricky; direct mutation of shared.map contents is the concern
-                             # For now, always copy from shared.map to local_map and then to map_obj
-                             # if local_map is used consistently for decisions.
                             pass # map_obj will be updated after UI commands section if needed
                         local_map = copy.deepcopy(shared.map)
-                        # If map_obj is None (e.g. first time after a load) or significantly different, update it.
-                        # This logic is complex; simplified: robot works on map_obj, UI syncs to shared.map
-                        # Robot's map_obj is the "master" during its operations, shared.map is for UI and load/save.
-                        # After 'load', map_obj is directly updated.
-                    else: # shared.map is None, maybe at the very start
+                    else: 
                         if map_obj: # if robot has a map_obj
                              if shared.acquire(): # Update shared map with robot's current map_obj
                                  try:
@@ -428,6 +421,9 @@ def runrobot(shared: SharedData, behaviors: Behaviors, robot_hardware: Robot, in
                     else: # Accurate turn leg for goal mode or explore mode's accurate turn
                         current_pose.heading = num_streets_to_goal[1].pop(0)
                         if not num_streets_to_goal[1]: num_streets_to_goal[0] = 0 
+                    current_street_blocked = behaviors.check_blockage()
+                    if current_street_blocked:
+                        map_obj.check_and_set_blocked(current_pose, current_street_blocked)
                     map_obj.outcomeA(pose0, current_pose, True)
 
                 elif action_cmd == 'r':
@@ -454,23 +450,33 @@ def runrobot(shared: SharedData, behaviors: Behaviors, robot_hardware: Robot, in
                     else:
                         current_pose.heading = num_streets_to_goal[1].pop(0)
                         if not num_streets_to_goal[1]: num_streets_to_goal[0] = 0
+                    current_street_blocked = behaviors.check_blockage()
+                    if current_street_blocked:
+                        map_obj.check_and_set_blocked(current_pose, current_street_blocked)
                     map_obj.outcomeA(pose0, current_pose, False)
 
                 elif action_cmd == 's':
                     isUturn, _, road_ahead = behaviors.line_follow()
                     if not isUturn:
                         current_pose.calcmove()
+                        current_street_blocked = behaviors.check_blockage()
+                        if current_street_blocked:
+                            map_obj.check_and_set_blocked(current_pose, current_street_blocked)
                         map_obj.outcomeB(pose0, current_pose, road_ahead)
                     else:
                         current_pose.calcuturn()
+                        current_street_blocked = behaviors.check_blockage()
+                        if current_street_blocked:
+                            map_obj.check_and_set_blocked(current_pose, current_street_blocked)
                         map_obj.outcomeC(pose0, current_pose, road_ahead)
                 
                 if action_cmd: # If an action was actually performed
-                    map_obj.plot(current_pose)
+
                     # Update shared map after successful action
                     if shared.acquire():
                         try:
                             shared.map = copy.deepcopy(map_obj)
+                            shared.map.plot(current_pose)
                         finally:
                             shared.release()
             
@@ -508,7 +514,8 @@ def main():
     robot_hardware = Robot(io) 
     # Note: DriveSystem and LineSensor are part of robot_hardware
     adc = ADC(io) 
-    behaviors_obj = Behaviors(robot_hardware.drive_system, robot_hardware.sensors, adc)
+    proximity = ProximitySensor(io)
+    behaviors_obj = Behaviors(robot_hardware.drive_system, robot_hardware.sensors, adc, proximity)
     print("Hardware: Initialization complete.")
 
     initial_x = args.x
@@ -539,10 +546,12 @@ def main():
         
         print("Main thread: Shutting down hardware...")
         if hasattr(robot_hardware, 'stop') and callable(getattr(robot_hardware, 'stop')):
-             robot_hardware.stop() # This should also call io.stop()
+            proximity.shutdown()
+            robot_hardware.stop() # This should also call io.stop()
         else: # Fallback
             print("Main thread: robot_hardware.stop() not found or not callable. Attempting manual stop.")
             if hasattr(robot_hardware, 'drive_system') and hasattr(robot_hardware.drive_system, 'stop'):
+                proximity.shutdown()
                 robot_hardware.drive_system.stop()
             if hasattr(io, "connected") and io.connected:
                 io.stop()
