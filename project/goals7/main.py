@@ -424,6 +424,7 @@ def autonomous_exploration(robot, shared):
             shared.update(command='left')  # Turn left
         else:
             shared.update(command='right')  # Turn right
+        map_obj.plot(pose)  # Update visualization
         return
 
     # Get unexplored streets and find the one closest to current heading
@@ -433,9 +434,11 @@ def autonomous_exploration(robot, shared):
         if nearest is None:
             print("Map fully explored! Returning to manual mode.")
             shared.update(mode=0)
+            map_obj.plot(pose)  # Update visualization
             return
         
         shared.update(goal=nearest, mode=2)
+        map_obj.plot(pose)  # Update visualization
         return
 
     closest_heading = min(unexplored_streets, 
@@ -473,6 +476,8 @@ def autonomous_exploration(robot, shared):
             shared.update(command='left', num_streets_to_goal=num_streets_to_goal)
         else:
             shared.update(command='right', num_streets_to_goal=num_streets_to_goal)
+    
+    map_obj.plot(pose)  # Update visualization
 
 def goal_seeking(robot, shared):
     """Handle goal-seeking mode."""
@@ -482,7 +487,7 @@ def goal_seeking(robot, shared):
         print("Goal reached! Returning to manual mode.")
         shared.update(mode=0, goal=None)
         map_obj.setstreet(None, None)
-        map_obj.plot(pose)
+        map_obj.plot(pose)  # Update visualization
         return
 
     current = map_obj.getintersection(pose.x, pose.y)
@@ -490,7 +495,7 @@ def goal_seeking(robot, shared):
         print("No valid path to goal. Returning to manual mode.")
         shared.update(mode=0, goal=None)
         map_obj.setstreet(None, None)
-        map_obj.plot(pose)
+        map_obj.plot(pose)  # Update visualization
         return
 
     if pose.heading != current.direction:
@@ -498,6 +503,8 @@ def goal_seeking(robot, shared):
         shared.update(command='left' if heading_diff <= 4 else 'right')
     else:
         shared.update(command='straight')
+    
+    map_obj.plot(pose)  # Update visualization
 
 def main():
     """Main entry point for the robot navigation and mapping program."""
