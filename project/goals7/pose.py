@@ -1,38 +1,57 @@
 from config import DX_DY_TABLE
 
 
-def getTurnAngle(angle1: float, angle2: float, isLeft: bool = True):
-    """
-    Calculate the turn angle between two angles.
 
-    Args:
-        angle1: First angle in degrees
-        angle2: Second angle in degrees
-        isLeft: Boolean indicating if the turn is to the left (True) or right (False)
-
-    Returns:
-        float: The turn angle in degrees. Positive for left turns, negative for right turns.
-    """
-    # Normalize angles to [-180, 180] range
-    print(f'Angle 1={angle1}, Angle 2={angle2}')
-    angle1 = ((angle1 + 180) % 360) - 180
-    angle2 = ((angle2 + 180) % 360) - 180
-
-    # Calculate the difference
+def getTurnAngle(angle1, angle2, isLeft=True):
     diff = angle2 - angle1
 
-    if isLeft:
-        # For left turns, we want positive values
-        # If diff is negative, we need to go the other way around
-        if diff < 0:
-            diff += 360
+    # If the difference is too small but you know a full turn happened
+    if abs(diff) < 10:  # adjust threshold as needed
+        diff += 360 if isLeft else -360
     else:
-        # For right turns, we want negative values
-        # If diff is positive, we need to go the other way around
-        if diff > 0:
-            diff -= 360
+        if isLeft:
+            if diff <= 0:
+                diff += 360
+        else:
+            if diff >= 0:
+                diff -= 360
 
     return diff
+
+
+
+# def getTurnAngle(angle1: float, angle2: float, isLeft: bool = True):
+#     """
+#     Calculate the turn angle between two angles.
+
+#     Args:
+#         angle1: First angle in degrees
+#         angle2: Second angle in degrees
+#         isLeft: Boolean indicating if the turn is to the left (True) or right (False)
+
+#     Returns:
+#         float: The turn angle in degrees. Positive for left turns, negative for right turns.
+#     """
+#     # Normalize angles to [-180, 180] range
+#     print(f'Angle 1={angle1}, Angle 2={angle2}')
+#     angle1 = ((angle1 + 180) % 360) - 180
+#     angle2 = ((angle2 + 180) % 360) - 180
+
+#     # Calculate the difference
+#     diff = angle2 - angle1
+
+#     if isLeft:
+#         # For left turns, we want positive values
+#         # If diff is negative, we need to go the other way around
+#         if diff < 0:
+#             diff += 360
+#     else:
+#         # For right turns, we want negative values
+#         # If diff is positive, we need to go the other way around
+#         if diff > 0:
+#             diff -= 360
+
+#     return diff
 
 
 

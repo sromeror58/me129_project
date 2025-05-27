@@ -149,7 +149,7 @@ def choose_best_angle(time_estimate, mag_estimate, angles, pose):
     # Convert 360 degree angles to 0 degree
     # change to this and fix if we have turns > 360
     # angles = [0 if abs(angle) >= 360 else angle for angle in angles]
-    angles = [0 if abs(angle) == 360 else angle for angle in angles]
+    # angles = [0 if abs(angle) == 360 else angle for angle in angles]
 
     # Adjust weights if it's detected as a near full turn
     if abs(mag_estimate) <= 25 and abs(time_estimate) >= 120:
