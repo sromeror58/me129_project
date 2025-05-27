@@ -214,8 +214,23 @@ class Map:
                             intersection.updateStreet(heading, STATUS.NONEXISTENT)
 
                     print("FOUR ROADS RULE")
-
-    def outcomeA(self, pose0, pose1, isLeft: bool):
+    
+    def generate_heading_range(self, h0, h1, isLeft):
+        headings = []
+        h0 %= 8
+        h1 %= 8
+        if isLeft:
+            h = (h0 + 1) % 8
+            while h != h1:
+                headings.append(h)
+                h = (h+1) %8
+        else:
+            h = (h0 - 1) % 8
+            while h != h1:
+                headings.append(h)
+                h = (h-1) % 8
+        return headings
+    def outcomeA(self, pose0, pose1, isLeft):
         """
         Set streets to STATUS.NONEXISTENT based on the direction of turn from pose0 to pose1.
 
@@ -229,35 +244,64 @@ class Map:
             isLeft (bool): True if turning left, False if turning right
         """
         intersection = self.getintersection(pose0.x, pose0.y)
-        h0 = pose0.heading
-        h1 = pose1.heading
-
-        if isLeft:
-            # Left turn
-            if h0 < h1:
-                for h in range(h0 + 1, h1):
-                    intersection.updateStreet(h, STATUS.NONEXISTENT)
-            else:
-                for h in range(h0 + 1, 8):
-                    intersection.updateStreet(h, STATUS.NONEXISTENT)
-                for h in range(0, h1):
-                    intersection.updateStreet(h, STATUS.NONEXISTENT)
-        else:
-            # Right turn
-            if h1 < h0:
-                for h in range(h1 + 1, h0):
-                    intersection.updateStreet(h, STATUS.NONEXISTENT)
-            else:
-                for h in range(h1 + 1, 8):
-                    intersection.updateStreet(h, STATUS.NONEXISTENT)
-                for h in range(0, h0):
-                    intersection.updateStreet(h, STATUS.NONEXISTENT)
-
+        # might need to take modulo 8 of each h0 and h1
+        h0 = pose0.heading % 8
+        h1 = pose1.heading % 8
+        headings_to_mark = self.generate_heading_range(h0, h1, isLeft)
+        for h in headings_to_mark:
+            intersection.updateStreet(h, STATUS.NONEXISTENT)
+        
         intersection.updateStreet(h1, STATUS.UNEXPLORED)
         intersection.updateStreet((h1 + 1) % 8, STATUS.NONEXISTENT)
         intersection.updateStreet((h1 - 1) % 8, STATUS.NONEXISTENT)
-        
         self.four_roads_rule(pose1)
+        
+        
+
+    # def outcomeA(self, pose0, pose1, isLeft: bool):
+    #     """
+    #     Set streets to STATUS.NONEXISTENT based on the direction of turn from pose0 to pose1.
+
+    #     This method is called when the robot makes a turn. It marks all streets between
+    #     the starting heading and ending heading as non-existent, except for the street
+    #     that was actually taken.
+
+    #     Args:
+    #         pose0 (Pose): Starting pose
+    #         pose1 (Pose): Ending pose
+    #         isLeft (bool): True if turning left, False if turning right
+    #     """
+    #     intersection = self.getintersection(pose0.x, pose0.y)
+    #     # might be an issue for h0 take away abs if it breaks
+    #     h0 = abs(pose0.heading)
+    #     h1 = pose1.heading
+
+    #     if isLeft:
+    #         # Left turn
+    #         if h0 < h1:
+    #             for h in range(h0 + 1, h1):
+    #                 intersection.updateStreet(h, STATUS.NONEXISTENT)
+    #         else:
+    #             for h in range(h0 + 1, 8):
+    #                 intersection.updateStreet(h, STATUS.NONEXISTENT)
+    #             for h in range(0, h1):
+    #                 intersection.updateStreet(h, STATUS.NONEXISTENT)
+    #     else:
+    #         # Right turn
+    #         if h1 < h0:
+    #             for h in range(h1 + 1, h0):
+    #                 intersection.updateStreet(h, STATUS.NONEXISTENT)
+    #         else:
+    #             for h in range(h1 + 1, 8):
+    #                 intersection.updateStreet(h, STATUS.NONEXISTENT)
+    #             for h in range(0, h0):
+    #                 intersection.updateStreet(h, STATUS.NONEXISTENT)
+
+    #     intersection.updateStreet(h1, STATUS.UNEXPLORED)
+    #     intersection.updateStreet((h1 + 1) % 8, STATUS.NONEXISTENT)
+    #     intersection.updateStreet((h1 - 1) % 8, STATUS.NONEXISTENT)
+        
+    #     self.four_roads_rule(pose1)
 
 
     def outcomeB(self, pose0, pose1, road_ahead=False):
@@ -557,7 +601,51 @@ class Map:
         """
         intersection = self.getintersection(x, y)
         return any(status in [STATUS.UNKNOWN, STATUS.UNEXPLORED] for status in intersection.streets)
+    
+    def get_possible_angles(self, pose, turn_direction=None):
+        curr_heading = pose.heading
+        intersection = self.getintersection(pose.x, pose.y)
 
+        possible_headings = [h for h in range(8) if intersection.streets[h] in [
+            STATUS.UNKNOWN, STATUS.UNEXPLORED, STATUS.DEADEND, STATUS.CONNECTED]]
+        print(f'Possible headings: {possible_headings}')
+
+        filtered = [h for h in possible_headings if not any(
+            intersection.streets[(h + offset) % 8] in [STATUS.UNEXPLORED, STATUS.DEADEND, STATUS.CONNECTED]
+            for offset in [-1, 1])]
+        print(f'Filtered headings: {filtered}')
+
+        active_headings = filtered or possible_headings
+        results = []
+
+        for h in active_headings:
+            delta = ((h - curr_heading) % 8) * 45
+            # Normalize delta to shortest angle (-180 to 180)
+            short_angle = (delta + 180) % 360 - 180
+            
+            # Full 360 turn in the desired direction
+            if turn_direction == "left":
+                # Allow regular left turns and a full +360
+                angles = [a for a in (short_angle, short_angle + 360) if a > 0]
+            elif turn_direction == "right":
+                # Allow regular right turns and a full -360
+                angles = [a for a in (short_angle, short_angle - 360) if a < 0]
+            else:
+                # Include both directions
+                angles = [short_angle, short_angle + 360, short_angle - 360]
+
+            for angle in angles:
+                results.append((h, angle))
+
+        # Remove duplicates and sort by angle
+        results = sorted(set(results), key=lambda x: x[1])
+        print(f'Results (with corrected long angles): {results}')
+        return results
+
+
+
+            
+    
     def get_unexplored_streets(self, x, y):
         """
         Get a list of headings with unexplored or unknown streets at the intersection.

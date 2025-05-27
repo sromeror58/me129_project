@@ -106,20 +106,46 @@ class Behaviors:
         self.drive_system.stop()
 
         turnAngle1 = getTurnAngle(angle1, self.adc.readangle(), isLeft)
-        print(turnAngle1)
-        if adjustedangle1:
-            turnAngle2 = getTurnAngle(adjustedangle1, self.adc.readangle(), isLeft)
-            print(turnAngle2)
+        # print(f'Turn angle from getTurnAngle: {turnAngle1}')
+        # if adjustedangle1:
+        #     turnAngle2 = getTurnAngle(adjustedangle1, self.adc.readangle(), isLeft)
+        #     print(turnAngle2)
 
-            # If less than full turn, since full turn's are pretty obvious
-            if abs(turnAngle2 - turnAngle1) <= 90:
-                # Want to weight closer to turnAngle2 the larger the turn is: 0/5 to 4/5
-                x = abs(turnAngle1) / 360
-                weight = (3 * x**2 - 2 * x**3) / 1.15
-                turnAngle1 = (1 - weight) * turnAngle1 + (weight) * turnAngle2
+        #     # If less than full turn, since full turn's are pretty obvious
+        #     if abs(turnAngle2 - turnAngle1) <= 90:
+        #         # Want to weight closer to turnAngle2 the larger the turn is: 0/5 to 4/5
+        #         x = abs(turnAngle1) / 360
+        #         weight = (3 * x**2 - 2 * x**3) / 1.15
+        #         turnAngle1 = (1 - weight) * turnAngle1 + (weight) * turnAngle2
 
-        print(turnAngle1)
+        # print(turnAngle1)
         return turnAngle1, curr - t0
+
+    def realign(self):
+        """
+        Performs realignment after turning.
+        """
+        
+        while True:
+            reading = self.sensors.read()
+            if reading == (0, 1, 0):
+                self.drive_system.stop()
+                break
+            elif reading == (0, 1, 1):
+                # self.drive_system.drive(TURN_R)
+                self.drive_system.drive(SPIN_R)
+                # self.drive_system.drive(HOOK_R)
+            elif reading == (0, 0, 1):
+                # self.drive_system.drive(HOOK_R)
+                self.drive_system.drive(SPIN_R)
+            elif reading == (1, 1, 0):
+                # self.drive_system.drive(TURN_L)
+                # self.drive_system.drive(HOOK_L)
+                self.drive_system.drive(SPIN_L)
+            elif reading == (1, 0, 0):
+                # self.drive_system.drive(HOOK_L)
+                self.drive_system.drive(SPIN_L)
+        
 
     def pull_forward(self, travel_time=0.55):
         """
@@ -194,7 +220,7 @@ class Behaviors:
                 curr = time.time()
                 # Then pull forward
                 # road_state = self.pull_forward(travel_time=0.38)
-                road_state = self.pull_forward(travel_time=0.44)
+                road_state = self.pull_forward(travel_time=0.55)
 
                 # isUturn, travel time, if road is ahead
                 return False, curr - t0, road_state

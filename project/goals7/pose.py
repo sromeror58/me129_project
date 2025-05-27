@@ -14,6 +14,7 @@ def getTurnAngle(angle1: float, angle2: float, isLeft: bool = True):
         float: The turn angle in degrees. Positive for left turns, negative for right turns.
     """
     # Normalize angles to [-180, 180] range
+    print(f'Angle 1={angle1}, Angle 2={angle2}')
     angle1 = ((angle1 + 180) % 360) - 180
     angle2 = ((angle2 + 180) % 360) - 180
 
@@ -32,6 +33,7 @@ def getTurnAngle(angle1: float, angle2: float, isLeft: bool = True):
             diff -= 360
 
     return diff
+
 
 
 class Pose:

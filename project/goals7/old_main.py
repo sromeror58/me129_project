@@ -70,6 +70,7 @@ def initialization_helper(behaviors, robot, heading, x, y):
     Returns:
         tuple: A dict mapping (x, y) to an Intersection, and the updated heading.
     """
+    original_heading = heading
     isUturn, travel_time, road_ahead = behaviors.line_follow()
     current_streets = [STATUS.UNKNOWN] * 8
     if isUturn:
@@ -87,6 +88,11 @@ def initialization_helper(behaviors, robot, heading, x, y):
         current_streets[heading] = (
             STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
         )
+    # initializing non-existent streets to opposite heading +- 45
+    opposite_heading = (original_heading + 4) % 8
+    current_streets[(opposite_heading + 1) % 8] = STATUS.NONEXISTENT
+    current_streets[(opposite_heading - 1) % 8] = STATUS.NONEXISTENT
+    
     initial_intersection = Intersection(x, y, current_streets)
     return {(x, y): initial_intersection}, heading
 
@@ -117,20 +123,48 @@ def initialize_map(behaviors, robot, heading, x, y):
         return map, pose
 
 
-def choose_best_angle(time_estimate, mag_estimate, headings):
-    weight_time = 0.4
-    weight_mag = 0.6
-    if abs(mag_estimate) <= 180 or abs(time_estimate) <= 180:
-        weight_time = 0.7
-        weight_mag = 0.3
-    weighted_average = weight_time * time_estimate + weight_mag * mag_estimate
-    print(weighted_average)
-    # weighted_average = (weight_time * time_estimate + weight_mag * mag_estimate) % 360
-    best_offset = min(headings, key=lambda head: abs(weighted_average - head * 45))
-    best_angle = best_offset * 45
-    print(best_angle, best_offset)
-    return best_angle, best_offset
+# def choose_best_angle(time_estimate, mag_estimate, angles, pose):
+#     weight_time = 0.3
+#     weight_mag = 0.7
+#     if abs(mag_estimate) <= 25 and abs(time_estimate) >= 120:
+#         print("BAM 360 turn")
+#         weight_time = 0
+#         weight_mag = 1.0
+#     elif abs(mag_estimate) <= 120 or abs(time_estimate) <= 120:
+#         weight_time = 0.4
+#         weight_mag = 0.6
+    
+#     weighted_average = weight_time * time_estimate + weight_mag * mag_estimate
+#     print(f'Weighted average: {weighted_average}')
+#     best_angle = min(angles, key=lambda angle: abs(weighted_average - angle))
+#     print(f'Chosen best angle: {best_angle}')
+#     return best_angle, (pose.heading + best_angle//45) % 8  # if you want to get the target heading
 
+
+
+def choose_best_angle(time_estimate, mag_estimate, angles, pose):
+    weight_time = 0.3
+    weight_mag = 0.7
+
+    # Convert 360 degree angles to 0 degree
+    # change to this and fix if we have turns > 360
+    # angles = [0 if abs(angle) >= 360 else angle for angle in angles]
+    angles = [0 if abs(angle) == 360 else angle for angle in angles]
+
+    # Adjust weights if it's detected as a near full turn
+    if abs(mag_estimate) <= 25 and abs(time_estimate) >= 120:
+        print("BAM 360 turn")
+        weight_time = 0
+        weight_mag = 1.0
+    elif abs(mag_estimate) <= 120 or abs(time_estimate) <= 120:
+        weight_time = 0.4
+        weight_mag = 0.6
+    
+    weighted_average = weight_time * time_estimate + weight_mag * mag_estimate
+    print(f'Weighted average: {weighted_average}')
+    best_angle = min(angles, key=lambda angle: abs(weighted_average - angle))
+    print(f'Chosen best angle: {best_angle}')
+    return best_angle, (pose.heading + best_angle//45) % 8
 
 
 
@@ -341,10 +375,11 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
             # perform left turn
             print("Turning left...")
             # Taking the possible turn angles
-            possible_turns = map.get_unexplored_streets(pose.x, pose.y)
-            possible_headings = [possible_turns[i][0] for i in range(len(possible_turns))]
-            # Reading initial magnetometer reading
-            initial_mag = behaviors.adc.readangle()
+            # possible_turns = map.get_unexplored_streets(pose.x, pose.y)
+            # possible_headings = [possible_turns[i][0] for i in range(len(possible_turns))]
+            
+            possible_angles = map.get_possible_angles(pose, turn_direction="left")
+            possible_headings = [(pose.heading + angle//45) % 8 for _, angle in possible_angles ]
             # Store current pose values before turning
             pose0 = pose.clone()
             # returning the turn angle and turn time
@@ -352,7 +387,10 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
             time_turn_estimate = turn_fit(turn_time)
             # print(f'time turn estimate: {time_turn_estimate} degrees')
             print(f'Turn time: {turn_time}\t time-based turn:{time_turn_estimate}\t mag-based turn:{turnAngle}\t list of angles:{possible_headings}')
-            chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, possible_headings)
+            # chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, possible_headings)
+            chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, [angle for _, angle in possible_angles], pose)
+
+
 
             if not num_streets_to_goal[1]: # If turning without goal-following
                 pose.calcturn(chosen_angle, True)
@@ -382,15 +420,19 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
                         print("BINGBBBBB")
 
             map.outcomeA(pose0, pose, True)
+            time.sleep(0.2)
+            behaviors.realign()
 
         elif cmd == "r":
             # perform right turn
             print("Turning right...")
             # Taking the possible turn angles
-            possible_turns = map.get_unexplored_streets(pose.x, pose.y)
-            possible_headings = [possible_turns[i][0] for i in range(len(possible_turns))]
+            # possible_turns = map.get_unexplored_streets(pose.x, pose.y)
+            # possible_headings = [possible_turns[i][0] for i in range(len(possible_turns))]
+            possible_angles = map.get_possible_angles(pose, turn_direction="right")
+            possible_headings = [(pose.heading + angle//45) % 8 for _, angle in possible_angles ]
             # Reading initial magnetometer reading
-            initial_mag = time.time(), behaviors.adc.readangle()
+            # initial_mag = time.time(), behaviors.adc.readangle()
             # Store current pose values before turning
             pose0 = pose.clone()
             # returning the turn angle and turn time
@@ -398,12 +440,11 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
             time_turn_estimate = -1 * turn_fit(turn_time)
             # print(f'time turn estimate: {time_turn_estimate} degrees')
             print(f'Turn time: {turn_time}\t time-based turn:{time_turn_estimate}\t mag-based turn:{turnAngle}\t list of angles:{possible_headings}')
-            chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, possible_headings)
+            # chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, possible_headings)
+            chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, [angle for _, angle in possible_angles], pose)
             print(f'Chosen angle: {chosen_angle}')
             if not num_streets_to_goal[1]:
-                # pose.calcturn(turnAngle, False)
-                print(-1 * chosen_angle)
-                pose.calcturn(-1 * chosen_angle, True)
+                pose.calcturn(chosen_angle, True)
             else:
                 pose.heading = num_streets_to_goal[1].pop(0)
 
@@ -428,9 +469,9 @@ def simple_brain(behaviors, robot, x=0.0, y=0.0, heading=0):
                     if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
                         pose.heading = (pose.heading - 1) % 8
                         print("BINGBBBBB")
-
-
             map.outcomeA(pose0, pose, False)
+            time.sleep(0.2)
+            behaviors.realign()
 
         ## OUTCOME B + C ##
         elif cmd == "s":
