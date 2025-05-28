@@ -112,7 +112,7 @@ class Intersection:
             status (STATUS): New status to set for the street
         """
         if status == STATUS.BLOCKED:
-            self.streets[heading] = STATUS.BLOCKED
+            self.blocked[heading] = True
             return
         if self.streets[heading] not in [STATUS.UNKNOWN, STATUS.UNEXPLORED]:
             return
@@ -163,7 +163,7 @@ class Map:
                 intersection.updateStreet(h, STATUS.BLOCKED)
                 if next_intersection.streets[opposite_heading] not in [STATUS.UNKNOWN, STATUS.NONEXISTENT]:
                     next_intersection.updateStreet(opposite_heading, STATUS.BLOCKED)
-            if next_intersection.streets[opposite_heading] == STATUS.BLOCKED:
+            if next_intersection.blocked[opposite_heading]:
                 print("YO WE HERE BBBBB!!!!")
                 intersection.updateStreet(h, STATUS.BLOCKED)
         else:
@@ -171,6 +171,12 @@ class Map:
                 print("LETS GO!!!!!")
                 intersection.updateStreet(h, STATUS.BLOCKED)
             
+    def clear_blocked(self):
+        """
+        Reset all blocked streets to False for all intersections in the map.
+        """
+        for intersection in self.intersections.values():
+            intersection.blocked = [False] * 8
 
     def getintersection(self, x, y):
         """
@@ -185,6 +191,21 @@ class Map:
         """
         if (x, y) not in self.intersections:
             self.intersections[(x, y)] = Intersection(x, y)
+
+            # Check all 8 directions from this intersection
+            for heading in range(8):
+                dx, dy = DX_DY_TABLE[heading]
+                next_x, next_y = x + dx, y + dy
+                
+                # If there's an intersection in this direction
+                if (next_x, next_y) in self.intersections:
+                    next_intersection = self.getintersection(next_x, next_y)
+                    opposite_heading = (heading + 4) % 8
+                    
+                    # If the street in the opposite direction is blocked, mark this street as blocked too
+                    if next_intersection.blocked[opposite_heading]:
+                        self.intersections[(x, y)].blocked[heading] = True
+
         return self.intersections[(x, y)]
 
     def four_roads_rule(self, pose):
@@ -417,7 +438,7 @@ class Map:
             STATUS.UNEXPLORED: "blue",
             STATUS.DEADEND: "red",
             STATUS.CONNECTED: "green",
-            STATUS.BLOCKED: "indigo"
+            STATUS.BLOCKED: "fuchsia"
         }
 
         # For each intersection in the map
@@ -430,9 +451,11 @@ class Map:
                 dy *= 0.5
 
                 # Get intersection status and corresponding color
-                
-                status = self.getintersection(x_int, y_int).streets[h]
+                curr_intersection = self.getintersection(x_int, y_int)
+                status = curr_intersection.streets[h]
                 color = status_colors[status]
+                if curr_intersection.blocked[h]:
+                    color = status_colors[STATUS.BLOCKED]
 
                 # Draw line from intersection halfway to next
                 plt.plot([x_int, x_int + dx], [y_int, y_int + dy], color=color)
@@ -539,6 +562,7 @@ class Map:
     def setstreet(self, xgoal, ygoal):
         """
         Finds the shortest path from every intersection to the goal at (xgoal, ygoal) (Dijkstra's).
+        Excludes blocked streets from path planning.
 
         Args:
             xgoal (int): X-coordinate of the goal intersection.
@@ -573,6 +597,10 @@ class Map:
             curr_cost = curr.cost
             
             for heading in range(8):
+                # Skip blocked streets
+                if curr.blocked[heading]:
+                    continue
+                    
                 if curr.streets[heading] != STATUS.CONNECTED:
                     continue
                     
@@ -584,6 +612,10 @@ class Map:
                     continue
                     
                 neighbor = self.getintersection(neighbor_x, neighbor_y)
+                # Skip if the return path is blocked
+                if neighbor.blocked[(heading + 4) % 8]:
+                    continue
+                    
                 potential_cost = curr_cost + distance(dx, dy)
 
                 if potential_cost < neighbor.cost:

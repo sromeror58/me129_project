@@ -64,6 +64,10 @@ def runui(shared):
                         shared.goal = None
                         print("Starting autonomous exploration")
 
+                    elif command == 'clear':
+                        shared.command = 'clear'
+                        print("Clearing all blockages")
+
                     elif command == 'goal':
                         try:
                             x = int(input("Enter goal x-coordinate: "))

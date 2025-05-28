@@ -173,7 +173,7 @@ class Behaviors:
         print(street_detector.update(readings))
         return street_detector.update(readings)
 
-    def check_blockage(self):
+    def check_blockage(self, distance: float = 0.4):
         """
         Checks if the street ahead is blocked using the front-facing ultrasound sensor.
         A street is considered blocked if there is an obstacle within 70cm.
@@ -185,7 +185,7 @@ class Behaviors:
         _, middle_distance, _ = self.proximity_sensor.read()
         
         # If no reading or reading is too close, consider it blocked
-        if middle_distance is None or middle_distance < 0.4:  
+        if middle_distance is None or middle_distance < distance:  
             # print(f"Street ahead is blocked! Distance: {middle_distance}m")
             return True
             
@@ -230,7 +230,7 @@ class Behaviors:
             # print(f"Road side: {side}")
 
             # Check for end of street
-            if eos_estimator.update(reading, side, 0.09):
+            if eos_estimator.update(reading, side, 0.15):
                 road_state = self.pull_forward(travel_time=0.6)
                 curr = time.time()
                 print("End of street detected!")
