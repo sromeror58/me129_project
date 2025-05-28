@@ -689,6 +689,7 @@ class Map:
     def get_unexplored_streets(self, x, y):
         """
         Get a list of headings with unexplored or unknown streets at the intersection.
+        Excludes blocked streets.
         
         Args:
             x (int): X-coordinate of the intersection
@@ -698,7 +699,9 @@ class Map:
             tuple: (street heading, street status) for each unexplored street
         """
         intersection = self.getintersection(x, y)
-        return [(h, intersection.streets[h]) for h in range(8) if intersection.streets[h] in [STATUS.UNKNOWN, STATUS.UNEXPLORED]]
+        return [(h, intersection.streets[h]) for h in range(8) 
+                if intersection.streets[h] in [STATUS.UNKNOWN, STATUS.UNEXPLORED] 
+                and not intersection.blocked[h]]
 
     
     def find_nearest_unexplored(self, start_x, start_y):

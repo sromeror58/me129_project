@@ -394,9 +394,6 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                         else:
                             # Get unexplored streets and find the one closest to current heading
                             unexplored_streets = map.get_unexplored_streets(pose.x, pose.y)
-                            # Filter out streets that are known to be blocked
-                            unexplored_streets = [street for street in unexplored_streets 
-                                               if not map.getintersection(pose.x, pose.y).blocked[street[0]]]
                             closest_heading = min(unexplored_streets, key=lambda x: min((x[0] - pose.heading) % 8, (pose.heading - x[0]) % 8))[0] if unexplored_streets else None
                             print(unexplored_streets)
                             print(closest_heading)
@@ -408,6 +405,11 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                                         print("Cannot go straight: street is blocked!")
                                         # Mark the street as blocked and continue exploration
                                         map.getintersection(pose.x, pose.y).updateStreet(closest_heading, STATUS.BLOCKED)
+                                        # Recalculate path to nearest unexplored intersection
+                                        nearest = map.find_nearest_unexplored(pose.x, pose.y)
+                                        if nearest is not None:
+                                            goal = nearest
+                                            map.setstreet(goal[0], goal[1])
                                         continue
                                     command = "straight"
 
@@ -449,36 +451,13 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                                 nearest = map.find_nearest_unexplored(pose.x, pose.y)
                                 
                                 if nearest is None:
-                                    # # Check if there are any blocked streets that haven't been explored
-                                    # has_blocked_unexplored = False
-                                    # for intersection in map.intersections.values():
-                                    #     for heading, status in enumerate(intersection.streets):
-                                    #         if status == STATUS.BLOCKED and not intersection.blocked[heading]:
-                                    #             has_blocked_unexplored = True
-                                    #             break
-                                    #     if has_blocked_unexplored:
-                                    #         break
-                                    
-                                    # if not has_blocked_unexplored:
-                                        print("Map fully explored! Returning to manual mode.")
-                                        if shared.acquire():
-                                            try:
-                                                shared.mode = 0
-                                                shared.goal = None
-                                            finally:
-                                                shared.release()
-                                    # else:
-                                    #     print("Found blocked streets that need to be explored...")
-                                    #     # Find nearest blocked street that hasn't been explored
-                                    #     nearest = None
-                                    #     min_dist = float('inf')
-                                    #     for intersection in map.intersections.values():
-                                    #         for heading, status in enumerate(intersection.streets):
-                                    #             if status == STATUS.BLOCKED and not intersection.blocked[heading]:
-                                    #                 dist = abs(intersection.x - pose.x) + abs(intersection.y - pose.y)
-                                    #                 if dist < min_dist:
-                                    #                     min_dist = dist
-                                    #                     nearest = (intersection.x, intersection.y)
+                                    print("Map fully explored! Returning to manual mode.")
+                                    if shared.acquire():
+                                        try:
+                                            shared.mode = 0
+                                            shared.goal = None
+                                        finally:
+                                            shared.release()
                                 else:
                                     goal = nearest
                                     if shared.acquire():
@@ -489,7 +468,7 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                                     map.setstreet(goal[0], goal[1])
 
                                 map.plot(pose)
-                                if shared.goal:
+                                if shared.goal and shared.mode != 0:
                                     print(f"Setting goal to unexplored intersection at {goal}")
                                 # continue  # Let the goal-directed navigation handle the movement
 
@@ -621,7 +600,7 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                         shared.command = None
                     finally:
                         shared.release()
-                map.check_and_set_blocked(pose, blocked)
+                map.getintersection(pose.x, pose.y).updateStreet(current_heading, STATUS.BLOCKED)
                 map.plot(pose)
                 # If we have a goal, recalculate path
                 if goal is not None:
