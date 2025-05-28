@@ -454,7 +454,7 @@ class Map:
                 curr_intersection = self.getintersection(x_int, y_int)
                 status = curr_intersection.streets[h]
                 color = status_colors[status]
-                if curr_intersection.blocked[h]:
+                if curr_intersection.blocked[h] and curr_intersection.streets[h] != STATUS.NONEXISTENT:
                     color = status_colors[STATUS.BLOCKED]
 
                 # Draw line from intersection halfway to next

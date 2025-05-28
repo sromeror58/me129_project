@@ -17,6 +17,10 @@ class SharedData:
         # Map state
         self.map_filename = None  # Current map filename for save/load operations
         self.before_pause = None
+        # ROS parameters
+        self.robotx = 0 # Copy of the robot’s x
+        self.roboty = 0 # Copy of the robot’s y
+        self.robotheading = 0 # Copy of the robot’s heading
 
     def acquire(self):
         return self.lock.acquire()
@@ -58,6 +62,7 @@ def runui(shared):
             # Grab access to the shared data
             if shared.acquire():
                 try:
+                    
                     # Process the command
                     if command == 'explore':
                         shared.mode = 1  # Explore mode

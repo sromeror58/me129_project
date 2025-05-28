@@ -17,6 +17,7 @@ import rclpy
 import socket
 import time
 import threading
+import copy
 
 from math import pi, sin, cos
 
@@ -97,10 +98,9 @@ class ROSNode(Node):
             try:
                 self.shared.mode = 2  # Goal mode
                 self.shared.goal = copy.deepcopy((xgoal, ygoal))
-                self.shared.step_mode = False
                 print(f"Setting ROS goal to ({xgoal}, {y_goal})")
             except ValueError:
-                print("Invalid coordinates. Please enter integers.")
+                print("Invalid coordinates.")
             finally:
                 # Always release the lock
                 self.shared.release()
@@ -118,8 +118,7 @@ class ROSNode(Node):
             try:
                 self.shared.mode = 1  # Explore mode
                 self.shared.goal = None
-                self.shared.step_mode = False
-                print("Starting autonomous exploration")
+                print("Starting ROS autonomous exploration")
             finally:
                 # Always release the lock
                 self.shared.release()
