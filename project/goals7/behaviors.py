@@ -185,11 +185,11 @@ class Behaviors:
         _, middle_distance, _ = self.proximity_sensor.read()
         
         # If no reading or reading is too close, consider it blocked
-        if middle_distance is None or middle_distance < 0.7:  
-            print(f"Street ahead is blocked! Distance: {middle_distance}m")
+        if middle_distance is None or middle_distance < 0.4:  
+            # print(f"Street ahead is blocked! Distance: {middle_distance}m")
             return True
             
-        print(f"Street ahead is clear. Distance: {middle_distance}m")
+        # print(f"Street ahead is clear. Distance: {middle_distance}m")
         return False
 
     def line_follow(self):

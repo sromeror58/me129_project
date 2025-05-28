@@ -60,7 +60,7 @@ class STATUS(Enum):
     UNEXPLORED = 2 # blue
     DEADEND = 3 # red
     CONNECTED = 4 # green
-    BLOCKED = 5 # yellow
+    BLOCKED = 5 # purple
 
 
 class DIJKSTRA_STATE(Enum):
@@ -90,6 +90,7 @@ class Intersection:
         self.cost = float("inf")
         self.direction = None
         self.dijkstra_state = DIJKSTRA_STATE.UNVISITED
+        self.blocked = [False] * 8 # keep track of heading where there is blocking (true=blocked, false=otherwise)
         if streets is not None:
             self.streets = streets
         else:
@@ -158,10 +159,16 @@ class Map:
             next_intersection = self.getintersection(next_x, next_y)
             opposite_heading = (h + 4) % 8
             if is_blocked:
+                print("YO WE HERE AAAAA!!!!")
                 intersection.updateStreet(h, STATUS.BLOCKED)
-                if next_intersection.streets[opposite_heading] not in [STATUS.UNKNOWN, STATUS.UNEXPLORED]:
+                if next_intersection.streets[opposite_heading] not in [STATUS.UNKNOWN, STATUS.NONEXISTENT]:
                     next_intersection.updateStreet(opposite_heading, STATUS.BLOCKED)
             if next_intersection.streets[opposite_heading] == STATUS.BLOCKED:
+                print("YO WE HERE BBBBB!!!!")
+                intersection.updateStreet(h, STATUS.BLOCKED)
+        else:
+            if is_blocked:
+                print("LETS GO!!!!!")
                 intersection.updateStreet(h, STATUS.BLOCKED)
             
 
@@ -410,7 +417,7 @@ class Map:
             STATUS.UNEXPLORED: "blue",
             STATUS.DEADEND: "red",
             STATUS.CONNECTED: "green",
-            STATUS.BLOCKED: "yellow"
+            STATUS.BLOCKED: "indigo"
         }
 
         # For each intersection in the map
@@ -423,6 +430,7 @@ class Map:
                 dy *= 0.5
 
                 # Get intersection status and corresponding color
+                
                 status = self.getintersection(x_int, y_int).streets[h]
                 color = status_colors[status]
 
@@ -504,7 +512,7 @@ class Map:
         # plt.savefig(filename)
         print(f"Saved map to {filename}")
 
-    def load_map(self, filename="mymap"):
+    def load_map(filename="mymap"):
         # filename = f"plots/map_x{pose.x}_y{pose.y}_h{pose.heading}.pickle"
         filename = f"plots/{filename}.pickle"
         print("Loading the map from %s..." % filename)
