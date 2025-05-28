@@ -1,19 +1,19 @@
+# Imports
 import pigpio
 import traceback
 import os
 import argparse
-import copy 
-from drive_system import DriveSystem
+import copy
+from drive_system import DriveSystem, turn_fit
 from sensor import LineSensor
 from behaviors import Behaviors
 from pose import Pose
 from magnetometer import ADC
-from proximitysensor import ProximitySensor
 from map import Map, Intersection, STATUS
 import time
+from proximitysensor import ProximitySensor
+from ui_main import SharedData
 import threading
-from ui_main import SharedData, runui
-
 
 class Robot:
     """
@@ -56,9 +56,6 @@ class Robot:
             print(f"Error stopping pigpio: {e}")
 
 
-# The old initialize_map and initialization_helper are superseded by UI commands 
-# and direct initialization in runrobot.
-
 def initialization_helper(behaviors, robot, heading, x, y):
     """
     Initializes the intersection at (x, y) with street status based on sensor data.
@@ -76,6 +73,7 @@ def initialization_helper(behaviors, robot, heading, x, y):
     Returns:
         tuple: A dict mapping (x, y) to an Intersection, and the updated heading.
     """
+    original_heading = heading
     isUturn, travel_time, road_ahead = behaviors.line_follow()
     current_streets = [STATUS.UNKNOWN] * 8
     if isUturn:
@@ -93,470 +91,592 @@ def initialization_helper(behaviors, robot, heading, x, y):
         current_streets[heading] = (
             STATUS.UNEXPLORED if road_ahead else STATUS.NONEXISTENT
         )
+    # initializing non-existent streets to opposite heading +- 45
+    opposite_heading = (original_heading + 4) % 8
+    current_streets[(opposite_heading + 1) % 8] = STATUS.NONEXISTENT
+    current_streets[(opposite_heading - 1) % 8] = STATUS.NONEXISTENT
+    
+    # if road ahead, block out +- 45 headings
+    if road_ahead:
+        current_streets[(heading + 1) % 8] = STATUS.NONEXISTENT
+        current_streets[(heading - 1) % 8] = STATUS.NONEXISTENT
     initial_intersection = Intersection(x, y, current_streets)
     return {(x, y): initial_intersection}, heading
 
-def runrobot(shared: SharedData, behaviors: Behaviors, robot_hardware: Robot, initial_x: float, initial_y: float, initial_heading: int):
-    """
-    Main robot control loop, running in the main thread.
-    It interacts with the UI thread via the shared SharedData object.
-    """
-    print(f"Robot thread: Initializing with pose ({initial_x}, {initial_y}, {initial_heading})")
-    current_pose = Pose(initial_x, initial_y, initial_heading)
-    
-    print("Robot thread: Initializing first intersection...")
-    initial_intersections, updated_heading = initialization_helper(behaviors, robot_hardware, initial_heading, initial_x, initial_y)
-    current_pose.heading = updated_heading  
-    
-    map_obj = Map(current_pose, initial_intersections)
-    # Initialize shared.map after map_obj is created
-    if shared.acquire():
-        try:
-            shared.map = copy.deepcopy(map_obj)
-        finally:
-            shared.release()
-    map_obj.plot(current_pose)
 
-    # Local to robot thread
-    num_streets_to_goal = [0, []] 
-    running = True
-    
-    # To store the mode before pausing, to allow resume to correct mode
-    previous_autonomous_mode_before_pause = 1 
-    has_printed_pause_message = False 
+def initialize_map(behaviors, robot, heading, x, y, ask=False, no_ask_filename=""):
+    """
+    Asks the user to load a map or create a new one, then returns the map and starting pose.
+    """
+    choice = "n"
+    if ask:
+        choice = input("Load existing map? (y/n): ").strip().lower()
+    if choice == "y":
+        # only querying file name without extension (i.e. without .pickle at the end for simplicity)
+        filename = input("Enter filename (default: mymap.pickle): ").strip() or "mymap"
+        print(f'filename inputted: {filename}')
+        map_obj = Map.load_map(filename=filename)
+        x = int(input("Enter starting x-coordinate: "))
+        y = int(input("Enter starting y-coordinate: "))
+        heading = int(input("Enter starting heading (0–7): "))
+        intersection_dictionary, heading = initialization_helper(
+            behaviors, robot, heading, x, y
+        )
+        pose = Pose(x, y, heading)
+        return map_obj, pose
+    else:
+        intersection_dictionary, heading = initialization_helper(
+            behaviors, robot, heading, x, y
+        )
+        pose = Pose(x, y, heading)
+        if no_ask_filename:
+            map_obj = Map.load_map(no_ask_filename)
+        else:
+            map_obj = Map(pose, intersection_dictionary)
+        return map_obj, pose
 
-    try:
-        while running:
-            local_mode = 0
-            local_goal = None
-            local_command = None
-            local_map_filename = None
-            local_ui_pose_update = None
-            local_step_mode = False
-            local_map = None 
-            
+
+def choose_best_angle(time_estimate, mag_estimate, angles, pose):
+    weight_time = 0.3
+    weight_mag = 0.7
+
+    # Convert 360 degree angles to 0 degree
+    # change to this and fix if we have turns > 360
+    # angles = [0 if abs(angle) >= 360 else angle for angle in angles]
+    # angles = [0 if abs(angle) == 360 else angle for angle in angles]
+
+    # Adjust weights if it's detected as a near full turn
+    if abs(mag_estimate) <= 25 and abs(time_estimate) >= 120:
+        print("BAM 360 turn")
+        weight_time = 0
+        weight_mag = 1.0
+    elif abs(mag_estimate) <= 120 or abs(time_estimate) <= 120:
+        weight_time = 0.4
+        weight_mag = 0.6
+    
+    weighted_average = weight_time * time_estimate + weight_mag * mag_estimate
+    print(f'Weighted average: {weighted_average}')
+    best_angle = min(angles, key=lambda angle: abs(weighted_average - angle))
+    print(f'Chosen best angle: {best_angle}')
+    return best_angle, (pose.heading + best_angle//45) % 8
+
+def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
+    """
+    Simple brain function that handles robot navigation and mapping.
+
+    This function implements a basic control loop that:
+    1. Accepts user commands for robot movement
+    2. Updates the robot's pose based on the commands
+    3. Updates the map based on the robot's movement outcomes
+    4. Visualizes the map and robot's current state
+
+    Args:
+        behaviors (Behaviors): Robot behaviors instance for executing movements
+        robot (Robot): Robot instance for hardware control
+        x (float): Initial x-coordinate x(default: 0.0)
+        y (float): Initial y-coordinate (default: 0.0)
+        heading (int): Initial heading direction (0-7, default: 0)
+    """
+    map, pose = initialize_map(behaviors, robot, heading, x, y, ask=True)
+    map.plot(pose)
+
+    goal = None  # Track current goal coordinates
+    num_streets_to_goal = [0, []] # Track turns needed to get to goal
+
+    shared.mode = 0
+
+    while True:
+
+        # Acquire shared data
+        if shared.acquire():
+            try:
+                mode = shared.mode
+                take_step = shared.take_step
+                goal = shared.goal 
+                command = shared.command 
+                map_name = shared.map_filename
+                before_pause = shared.before_pause
+
+            finally:
+                shared.release()
+
+        # If escaped goal following / explore, reset num_streets_to_goal
+        if mode in [0, 3]:
+            num_streets_to_goal = [0, []]
+
+        # GO THROUGH COMMANDS
+        if command == 'save':
+            print("Saving plot...")
+            map.save_map(filename=map_name)
             if shared.acquire():
                 try:
-                    local_mode = shared.mode
-                    local_goal = shared.goal
-                    local_command = shared.command
-                    if local_command: # If there is a command, consume it
-                        shared.command = None
-                    
-                    local_map_filename = shared.map_filename
-                    # map_filename is consumed after use by specific commands
-
-                    local_ui_pose_update = shared.pose 
-                    
-                    local_step_mode = shared.step_mode
-                    # step_mode is NOT consumed here by robot thread; UI thread resets it or robot thread consumes it when stepping
-
-                    # Update shared.pose with the robot's current position for UI
-                    shared.pose = (current_pose.x, current_pose.y, current_pose.heading)
-                    
-                    # Make a deep copy of the map for this iteration's logic
-                    # Ensure map_obj (robot's working copy) is updated if shared.map was changed by UI (e.g. load)
-                    if shared.map is not None:
-                        if map_obj is None or id(map_obj) != id(shared.map): # Check if shared.map is a new instance
-                            pass # map_obj will be updated after UI commands section if needed
-                        local_map = copy.deepcopy(shared.map)
-                    else: 
-                        if map_obj: # if robot has a map_obj
-                             if shared.acquire(): # Update shared map with robot's current map_obj
-                                 try:
-                                     shared.map = copy.deepcopy(map_obj)
-                                 finally: shared.release()
-                             local_map = copy.deepcopy(map_obj)
-
+                    shared.command = None
+                finally:
+                    shared.release()
+        elif command == 'pose':
+            print("Setting pose...")
+            if shared.acquire():
+                try:
+                    pose_tuple = shared.pose
+                    pose = Pose(pose_tuple[0], pose_tuple[1], pose_tuple[2])
+                    map.plot(pose)
+                    shared.command = None
+                finally:
+                    shared.release()
+        elif command == 'show':
+            print("Updating map")
+            map.plot(pose)
+            if shared.acquire():
+                try:
+                    shared.command = None
+                finally:
+                    shared.release()
+        elif command == 'load':
+            print("Loading map...")
+            map, pose = initialize_map(behaviors, robot, heading, 0.0, 0.0, False, map_name)
+            map.plot(pose)
+            if shared.acquire():
+                try:
+                    shared.command = None
                 finally:
                     shared.release()
 
-            if local_mode == -1:
-                print("Robot thread: Quit command received from UI.")
-                running = False
-                continue
+        # GO THROUGH MODES
+        if mode == -1:
+            print("Quitting...")
+            robot.stop()
+            map.close()
+            break
+        # If not manual-mode: That is, goal-following, autonomous, step mode
+        if mode != 0 and not (mode == 3 and not take_step):
+            try:
+                taking_step = take_step
+                # If we have a goal, check if we've reached it
+                if goal is not None:
 
-            # Process High-Priority UI Commands (state changes, no immediate movement)
-            if local_command == 'load':
-                if local_map_filename:
-                    try:
-                        print(f"Robot thread: Loading map from {local_map_filename}.pickle")
-                        new_map = Map.load_map(local_map_filename)
-                        print(f"Map '{local_map_filename}' loaded. Use 'pose' command to set robot's position on this map.")
-                        map_obj = new_map  # Robot's working map is now the new_map
-                        if shared.acquire(): # Update shared.map for UI
+                    if take_step:
+                        if shared.acquire():
                             try:
-                                shared.map = copy.deepcopy(new_map)
+                                shared.take_step = False
                             finally:
                                 shared.release()
-                        local_map = copy.deepcopy(new_map) # Update local_map copy for consistency
-                        map_obj.plot(current_pose) 
-                    except FileNotFoundError:
-                        print(f"Robot thread: Error loading map. File '{local_map_filename}.pickle' not found.")
-                    except Exception as e:
-                        print(f"Robot thread: Error loading map '{local_map_filename}': {e}")
-                    if shared.acquire(): 
-                        shared.map_filename = None
-                        shared.release()
-                local_command = None 
 
-            elif local_command == 'save':
-                if local_map_filename:
-                    print(f"Robot thread: Saving map to {local_map_filename}.pickle")
-                    map_obj.save_map(filename=local_map_filename) # Save from robot's working map_obj
-                    if shared.acquire(): 
-                        shared.map_filename = None
-                        shared.release()
-                local_command = None
+                    if (pose.x, pose.y) == goal:
 
-            elif local_command == 'pose':
-                if local_ui_pose_update: 
-                    print(f"Robot thread: Setting pose to {local_ui_pose_update}")
-                    current_pose.x = local_ui_pose_update[0]
-                    current_pose.y = local_ui_pose_update[1]
-                    current_pose.heading = local_ui_pose_update[2]
-                    if not map_obj.getintersection(current_pose.x, current_pose.y):
-                        new_streets = [STATUS.UNKNOWN] * 8
-                        map_obj.intersections[(current_pose.x, current_pose.y)] = Intersection(current_pose.x, current_pose.y, new_streets)
-                        print(f"Robot thread: Added new intersection at ({current_pose.x},{current_pose.y}) due to 'pose' command.")
-                    map_obj.plot(current_pose)
-                local_command = None
+                        # If was in goal mode, go to manual
+                        # If was in autonomous mode, clear goal
+                        if shared.acquire():
+                            try:
+                                if shared.mode == 2:
+                                    shared.mode = 0
+                                    print("Goal reached! Returning to manual mode from goal mode")
+                                elif shared.mode == 1:
+                                    print("Goal reached! Continuing autonomous mode")
+                                elif shared.mode == 3 and before_pause == 2:
+                                    print("Goal reached after the final step! Returning to manual mode from goal mode")
+                                    shared.mode = 0
+                                shared.goal = None
+                            finally:
+                                shared.release()
+                        map.setstreet(None, None)  # Clear optimal path tree
+                        map.plot(pose)
+                        continue
 
-            elif local_command == 'show':
-                print("Robot thread: Updating map visualization.")
-                map_obj.plot(current_pose)
-                local_command = None
-            
-            # --- Determine potential_action_cmd (robot's next potential physical action) ---
-            potential_action_cmd = None
-            
-            # Update previous_autonomous_mode_before_pause if currently in an autonomous mode
-            if local_mode == 1: # Explore
-                previous_autonomous_mode_before_pause = 1
-            elif local_mode == 2: # Goal
-                previous_autonomous_mode_before_pause = 2
+                    map.setstreet(goal[0], goal[1])
+                    # We haven't reached goal, so get current intersection and check optimal direction
+                    current = map.getintersection(pose.x, pose.y)
+                    if current.direction is not None:
 
-            # Determine the mode to use for calculating the potential action
-            mode_to_calculate_action_for = local_mode
-            if local_mode == 3 and local_step_mode: # If paused and stepping
-                mode_to_calculate_action_for = previous_autonomous_mode_before_pause
-            
-            current_intersection = map_obj.getintersection(current_pose.x, current_pose.y)
-            if not current_intersection and mode_to_calculate_action_for in [1,2]: # Only critical if an autonomous action is expected
-                print(f"CRITICAL ERROR: Robot at ({current_pose.x},{current_pose.y}) which is not a known intersection! Check map or use 'pose'. Switching to manual.")
-                if shared.acquire():
-                    shared.mode = 0
-                    shared.release()
-                local_mode = 0 # Effectively switch to manual for this cycle
-                mode_to_calculate_action_for = 0 # Don't attempt autonomous calculation
+                        # If current heading doesn't match optimal direction, need to turn
+                        if pose.heading != current.direction:
 
-            if local_mode == 0: # Manual action from UI
-                if local_command in ['left', 'right', 'straight']:
-                    potential_action_cmd = local_command[0]
-                    print(f"Robot thread: Manual action identified: {potential_action_cmd}")
+                            # If we haven't already, calculate number of turns needed
+                            if not num_streets_to_goal[1]:
 
-            elif mode_to_calculate_action_for == 1: # Explore Logic
-                unexplored_streets_at_current = map_obj.get_unexplored_streets(current_pose.x, current_pose.y)
-                target_heading_for_explore = None
-                if unexplored_streets_at_current:
-                    closest_street_info = min(unexplored_streets_at_current, key=lambda x_info: min((x_info[0] - current_pose.heading) % 8, (current_pose.heading - x_info[0]) % 8))
-                    target_heading_for_explore = closest_street_info[0]
-                    print(f"Robot thread: Exploring - Target heading at current intersection: {target_heading_for_explore}")
-                    # Accurate turn optimization for explore
-                    num_streets_to_goal = [0, []] # Reset for explore's simple turns or calc new accurate turn
-                    if target_heading_for_explore != current_pose.heading:
-                        heading_diff = (target_heading_for_explore - current_pose.heading) % 8
-                        turn_dir = 1 if heading_diff <= 4 else -1
-                        temp_h = current_pose.heading
-                        streets_list = []
-                        # current_intersection should be valid here if this block is reached
-                        current_int_for_turn_calc = map_obj.getintersection(current_pose.x, current_pose.y) # Re-fetch for safety
-                        can_do_accurate_turn = True
-                        if current_int_for_turn_calc:
-                            while temp_h != target_heading_for_explore:
-                                temp_h = (temp_h + turn_dir) % 8
-                                if current_int_for_turn_calc.streets[temp_h] == STATUS.UNKNOWN:
-                                    can_do_accurate_turn = False; break
-                                if current_int_for_turn_calc.streets[temp_h] != STATUS.NONEXISTENT:
-                                    streets_list.append(temp_h)
-                            if can_do_accurate_turn and streets_list: # Ensure target street is part of list
-                                num_streets_to_goal = [turn_dir, streets_list]
-                            else: # Default to simple turn, clear list
-                                num_streets_to_goal = [0,[]] 
-                        else: # Should not happen if initial check passed
-                            num_streets_to_goal = [0,[]]
+                                current_heading = pose.heading
+                                streets_encountered = 0
 
+                                # Calculate the difference in heading turning left
+                                heading_diff = (current.direction - current_heading) % 8
 
-                else: # No unexplored streets at current intersection
-                    nearest_unexplored_coord = map_obj.find_nearest_unexplored(current_pose.x, current_pose.y)
-                    if nearest_unexplored_coord is None:
-                        print("Robot thread: Map fully explored! Switching to manual mode.")
-                        if shared.acquire(): shared.mode = 0; shared.release()
-                        local_mode = 0 # Update local_mode to prevent action_cmd by pause/step logic later
-                        # potential_action_cmd remains None
-                    else:
-                        print(f"Robot thread: Exploring - Pathing to nearest unexplored intersection: {nearest_unexplored_coord}")
-                        map_obj.setstreet(nearest_unexplored_coord[0], nearest_unexplored_coord[1])
-                        current_intersection_with_path = map_obj.getintersection(current_pose.x, current_pose.y) 
-                        if current_intersection_with_path and current_intersection_with_path.direction is not None:
-                            target_heading_for_explore = current_intersection_with_path.direction
+                                if heading_diff <= 4:
+                                    num_streets_to_goal[0] = 1 # Left turns
+                                else:
+                                    num_streets_to_goal[0] = -1 # Right turns
+
+                                # Get list of streets encountered when turning in intended direction
+                                while current_heading != current.direction:
+                                    current_heading = (current_heading + num_streets_to_goal[0]) % 8
+                                    if current.streets[current_heading] != STATUS.NONEXISTENT: # Assuming streets have been mapped
+                                        num_streets_to_goal[1].append(current_heading)
+                                
+                            if num_streets_to_goal[0] > 0:
+                                command = 'left'  # Turn left
+                            else:
+                                command = 'right'  # Turn right
+
                         else:
-                            print(f"Robot thread: Exploring - No path to {nearest_unexplored_coord}. Stuck? Switching to manual.")
-                            if shared.acquire(): shared.mode = 0; shared.release()
-                            local_mode = 0
-                
-                if target_heading_for_explore is not None and (local_mode == 1 or (local_mode == 3 and local_step_mode and previous_autonomous_mode_before_pause == 1)):
-                    if current_pose.heading == target_heading_for_explore:
-                        potential_action_cmd = 's'
+                            print("Going straight along optimal path")
+                            command = 'straight'
                     else:
-                        # If num_streets_to_goal is populated, it implies an accurate turn.
-                        # Otherwise, simple diff.
-                        if num_streets_to_goal[1]: # Using accurate turn path
-                             potential_action_cmd = 'l' if num_streets_to_goal[0] > 0 else 'r'
-                        else: # Simple turn decision
-                            heading_diff = (target_heading_for_explore - current_pose.heading) % 8
-                            potential_action_cmd = 'l' if heading_diff <= 4 else 'r'
-                print(f"Robot thread: Explore action identified: {potential_action_cmd}, num_streets_to_goal: {num_streets_to_goal}")
+                        if taking_step:
+                            print("No valid path to goal. No step taken: clearing goal and staying in paused.")
+                            if shared.acquire():
+                                try:
+                                    shared.goal = None
+                                    shared.mode = 0
+                                finally:
+                                    shared.release()
+                        else:
+                            print("No valid path to goal. Returning to manual mode.")
+                            if shared.acquire():
+                                try:
+                                    shared.goal = None
+                                    shared.mode = 0
+                                finally:
+                                    shared.release()
+                        map.setstreet(None, None)  # Clear optimal path tree
+                        map.plot(pose)
+                        continue
+
+                else:
+                    if mode == 1 or take_step:
+                        if take_step:
+                            if shared.acquire():
+                                try:
+                                    shared.take_step = False
+                                finally:
+                                    shared.release()
+                        # In the process of making an accurate turn
+                        if num_streets_to_goal[1]:
+                            if num_streets_to_goal[0] > 0:
+                                command = "left"  # Turn left
+                            else:
+                                command = "right"  # Turn right
+
+                        else:
+                            # Get unexplored streets and find the one closest to current heading
+                            unexplored_streets = map.get_unexplored_streets(pose.x, pose.y)
+                            closest_heading = min(unexplored_streets, key=lambda x: min((x[0] - pose.heading) % 8, (pose.heading - x[0]) % 8))[0] if unexplored_streets else None
+                            print(unexplored_streets)
+                            print(closest_heading)
+
+                            if closest_heading is not None:
+                                if closest_heading == pose.heading:
+                                    command = "straight"
+
+                                else:
+                                    # Local exploration - choose first unexplored street
+                                    heading_diff = (closest_heading - pose.heading) % 8
+
+                                    # Can we make an accurate turn?
+                                    # If all the streets are known between the current heading and target heading, then we can make the turn more accurate
+                                    # So (1) all the streets between current and target heading are NOT UNKNOWN, (2) target is UNEXPLORED and NOT UNKNOWN
+                                    current_heading = pose.heading
+                                    if heading_diff <= 4:
+                                        num_streets_to_goal[0] = 1 # Left turns
+                                    else:
+                                        num_streets_to_goal[0] = -1 # Right turns
+                                    # Check all streets between current heading and target heading
+                                    current = map.getintersection(pose.x, pose.y)
+                                    while current_heading != closest_heading:
+                                        current_heading = (current_heading + num_streets_to_goal[0]) % 8
+                                        # If any street is UNKNOWN, we can't make an accurate turn
+                                        if current.streets[current_heading] == STATUS.UNKNOWN:
+                                            num_streets_to_goal[1] = [] # Clear the streets to encounter
+                                            break
+                                        # Otherwise, if the street EXISTS, then we should take note of it
+                                        elif current.streets[current_heading] != STATUS.NONEXISTENT:
+                                            num_streets_to_goal[1].append(current_heading)                    
+                                    # Also verify target street is UNEXPLORED
+                                    if current.streets[closest_heading] != STATUS.UNEXPLORED:
+                                        num_streets_to_goal[1] = []
+
+                                    # Now we can make an accurate turn, if it exists; otherwise, a less accurate turn
+                                    if heading_diff <= 4:
+                                        command = "left" 
+                                    else:
+                                        command = "right" 
+
+                            else:
+                                # No unexplored streets here, find nearest unexplored intersection
+                                nearest = map.find_nearest_unexplored(pose.x, pose.y)
+                                
+                                if nearest is None:
+                                    print("Map fully explored! Returning to manual mode.")
+                                    if shared.acquire():
+                                        try:
+                                            shared.mode = 0
+                                            shared.goal = None
+                                        finally:
+                                            shared.release()
+                                else:
+                                    goal = nearest
+                                    if shared.acquire():
+                                        try:
+                                            shared.goal = copy.deepcopy(nearest)
+                                        finally:
+                                            shared.release()
+                                    map.setstreet(goal[0], goal[1])
+
+                                map.plot(pose)
+                                print(f"Setting goal to unexplored intersection at {goal}")
+                                # continue  # Let the goal-directed navigation handle the movement
+
+            except KeyboardInterrupt:
+                robot.stop()
+                map.close()
+                break
 
 
-            elif mode_to_calculate_action_for == 2: # Goal Logic
-                if local_goal is None:
-                    print("Robot thread: Goal mode, but no goal set. Switching to manual.")
-                    if shared.acquire(): shared.mode = 0; shared.release()
-                    local_mode = 0
-                elif (current_pose.x, current_pose.y) == local_goal:
-                    print("Robot thread: Goal reached! Switching to manual mode.")
-                    if shared.acquire(): shared.mode = 0; shared.goal = None; shared.release()
-                    local_mode = 0
-                    map_obj.setstreet(None, None) 
-                    num_streets_to_goal = [0, []]
-                    map_obj.plot(current_pose) 
-                elif current_intersection: 
-                    map_obj.setstreet(local_goal[0], local_goal[1])
-                    current_intersection_with_path = map_obj.getintersection(current_pose.x, current_pose.y)
-                    if current_intersection_with_path and current_intersection_with_path.direction is not None:
-                        if current_pose.heading == current_intersection_with_path.direction:
-                            potential_action_cmd = 's'
-                            print(f"Robot thread: Goal Mode - Going straight towards {local_goal}")
-                        else: 
-                            if not num_streets_to_goal[1] or num_streets_to_goal[0] == 0 : # Calculate turn path if not already doing so or completed previous
-                                heading_diff = (current_intersection_with_path.direction - current_pose.heading) % 8
-                                num_streets_to_goal[0] = 1 if heading_diff <= 4 else -1 
-                                temp_h = current_pose.heading
-                                streets_list = []
-                                while temp_h != current_intersection_with_path.direction:
-                                    temp_h = (temp_h + num_streets_to_goal[0]) % 8
-                                    if current_intersection_with_path.streets[temp_h] != STATUS.NONEXISTENT:
-                                        streets_list.append(temp_h)
-                                num_streets_to_goal[1] = streets_list
-                                print(f"Robot thread: Goal Mode - Calculated turn path: {num_streets_to_goal}")
-                            potential_action_cmd = 'l' if num_streets_to_goal[0] > 0 else 'r'
-                            print(f"Robot thread: Goal Mode - Turning {potential_action_cmd} towards {current_intersection_with_path.direction}. Path: {num_streets_to_goal[1]}")
-                    else:
-                        print(f"Robot thread: Goal Mode - No valid path to goal {local_goal}. Switching to manual.")
-                        if shared.acquire(): shared.mode = 0; shared.goal = None; shared.release()
-                        local_mode = 0
-                        map_obj.setstreet(None, None)
-                        num_streets_to_goal = [0, []]
-                print(f"Robot thread: Goal action identified: {potential_action_cmd}")
+        ##############################################################
+        # LEFT, RIGHT, STRAIGHT RESULTING FROM EITHER MANUAL OR GOAL #
+        ##############################################################
 
+        if command == 'left':
+            # If paused and instructed to take a step
+            # perform left turn
+            print("Turning left...")
+            # Taking the possible turn angles
+            # possible_turns = map.get_unexplored_streets(pose.x, pose.y)
+            # possible_headings = [possible_turns[i][0] for i in range(len(possible_turns))]
+            possible_angles = map.get_possible_angles(pose, turn_direction="left")
+            possible_headings = [(pose.heading + angle//45) % 8 for _, angle in possible_angles ]
+            # Store current pose values before turning
+            pose0 = pose.clone()
+            # returning the turn angle and turn time
+            turnAngle, turn_time = behaviors.turn_to_next_street("left")
+            time_turn_estimate = turn_fit(turn_time)
+            # print(f'time turn estimate: {time_turn_estimate} degrees')
+            print(f'Turn time: {turn_time}\t time-based turn:{time_turn_estimate}\t mag-based turn:{turnAngle}\t list of angles:{possible_headings}')
+            # chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, possible_headings)
+            chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, [angle for _, angle in possible_angles], pose)
+            if not num_streets_to_goal[1]: # If turning without goal-following
+                pose.calcturn(chosen_angle, True)
+                # pose.calcturn(turnAngle, True)
+            else: # If turning without goal-following
+                pose.heading = num_streets_to_goal[1].pop(0)
+            intersection = map.getintersection(pose.x, pose.y)
+            # turned_angle = abs(turnAngle)
+            turned_angle = abs(chosen_angle)
+            dh = (pose.heading - pose0.heading) % 8
+            da_lower = (dh - 1) * 45
+            da_upper = (dh + 1) * 45
+            if intersection.streets[pose.heading] == STATUS.NONEXISTENT:
+                if abs(turned_angle - da_lower) < abs(turned_angle - da_upper):
+                    street = intersection.streets[(pose.heading - 1) % 8] 
+                    # Only adjust heading if the next closest street is already explored (CONNECTED or DEADEND)
+                    if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                        pose.heading = (pose.heading - 1) % 8
+                        print("BINGAAAAA")
+                else:
+                    street = intersection.streets[(pose.heading + 1) % 8] 
+                    if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                        pose.heading = (pose.heading + 1) % 8
+                        print("BINGBBBBB")
+            map.outcomeA(pose0, pose, True)
+            time.sleep(0.2)
+            behaviors.realign()
+            if shared.acquire():
+                try:
+                    shared.command = None
+                finally:
+                    shared.release()
 
-            # --- Determine final action_cmd based on actual local_mode (paused or not) ---
-            action_cmd = None 
-            if local_mode == 3: # Paused
-                if not has_printed_pause_message:
-                    print("Robot thread: Paused.")
-                    has_printed_pause_message = True
-                
-                if local_step_mode:
-                    print("Robot thread: Step command active.")
-                    action_cmd = potential_action_cmd # Use the action calculated based on previous_autonomous_mode
-                    if shared.acquire():
-                        shared.step_mode = False # Consume step
+        elif command == 'right':
+            # perform right turn
+            print("Turning right...")
+            # Taking the possible turn angles
+            # possible_turns = map.get_unexplored_streets(pose.x, pose.y)
+            # possible_headings = [possible_turns[i][0] for i in range(len(possible_turns))]
+            possible_angles = map.get_possible_angles(pose, turn_direction="right")
+            possible_headings = [(pose.heading + angle//45) % 8 for _, angle in possible_angles ]
+            # Reading initial magnetometer reading
+            # initial_mag = time.time(), behaviors.adc.readangle()
+            # Store current pose values before turning
+            pose0 = pose.clone()
+            # returning the turn angle and turn time
+            turnAngle, turn_time = behaviors.turn_to_next_street("right")
+            time_turn_estimate = -1 * turn_fit(turn_time)
+            # print(f'time turn estimate: {time_turn_estimate} degrees')
+            print(f'Turn time: {turn_time}\t time-based turn:{time_turn_estimate}\t mag-based turn:{turnAngle}\t list of angles:{possible_headings}')
+            # chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, possible_headings)
+            chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, [angle for _, angle in possible_angles], pose)
+            print(f'Chosen angle: {chosen_angle}')
+            if not num_streets_to_goal[1]:
+                pose.calcturn(chosen_angle, True)
+            else:
+                pose.heading = num_streets_to_goal[1].pop(0)
+            intersection = map.getintersection(pose.x, pose.y)
+            # turned_angle = abs(turnAngle)
+            turned_angle = abs(chosen_angle)
+            dh = (pose0.heading - pose.heading) % 8
+            da_lower = (dh + 1) * 45
+            da_upper = (dh - 1) * 45
+            if intersection.streets[pose.heading] == STATUS.NONEXISTENT:
+                if abs(turned_angle - da_lower) < abs(turned_angle - da_upper):
+                    street = intersection.streets[(pose.heading + 1) % 8] 
+                    # Only adjust heading if the next closest street is already explored (CONNECTED or DEADEND)
+                    if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                        pose.heading = (pose.heading + 1) % 8
+                        print("BINGAAAAA")
+                else:
+                    street = intersection.streets[(pose.heading - 1) % 8] 
+                    if street in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
+                        pose.heading = (pose.heading - 1) % 8
+                        print("BINGBBBBB")
+            map.outcomeA(pose0, pose, False)
+            time.sleep(0.2)
+            behaviors.realign()
+            if shared.acquire():
+                try:
+                    shared.command = None
+                finally:
+                    shared.release()
+
+        elif command == 'straight':
+            current = map.getintersection(pose.x, pose.y)
+            current_heading = pose.heading
+            if current.streets[current_heading] in [STATUS.NONEXISTENT, STATUS.BLOCKED]:
+                print("Cannot go straight: no street ahead!")
+                if shared.acquire():
+                    try:
+                        shared.command = None
+                    finally:
                         shared.release()
-                    if action_cmd:
-                        print(f"Robot thread: Stepping with action: {action_cmd}")
-                    else:
-                        print("Robot thread: Step requested, but no autonomous action determined (e.g. goal reached or explore stuck).")
-                # else: action_cmd remains None (paused, not stepping, so robot does nothing)
-            else: # Not paused (local_mode is 0, 1, or 2)
-                has_printed_pause_message = False # Reset pause message flag
-                action_cmd = potential_action_cmd # Use the action determined by manual, explore, or goal logic
+                continue
+            print("Going Straight")
+            # Store current pose values before moving
+            pose0 = pose.clone()
+            isUturn, travel_time, road_ahead = behaviors.line_follow()
+            # Outcome B
+            if not isUturn:
+                pose.calcmove()
+                map.outcomeB(pose0, pose, road_ahead)
+            # Outcome C
+            else:
+                pose.calcuturn()
+                map.outcomeC(pose0, pose, road_ahead)
+            if shared.acquire():
+                try:
+                    shared.command = None
+                finally:
+                    shared.release()
 
-            
-            # --- Execute Physical Action ---
-            if action_cmd:
-                print(f"Robot thread: Executing physical action: {action_cmd}")
-                pose0 = current_pose.clone()
-                
-                # Pre-check for straight action against NONEXISTENT street
-                if action_cmd == 's':
-                    # current_intersection might have been updated by setstreet in goal/explore path logic
-                    current_int_for_straight = map_obj.getintersection(current_pose.x, current_pose.y)
-                    if current_int_for_straight and current_int_for_straight.streets[current_pose.heading] == STATUS.NONEXISTENT:
-                        print(f"Robot thread: Cannot go straight from ({current_pose.x},{current_pose.y}) heading {current_pose.heading}, street is NONEXISTENT.")
-                        action_cmd = None # Cancel action
+            if (pose.x, pose.y) == goal:
+                # If was in goal mode, go to manual
+                # If was in autonomous mode, clear goal
+                if shared.acquire():
+                    try:
+                        if shared.mode == 2:
+                            shared.mode = 0
+                            print("Goal reached! Returning to manual mode from goal mode")
+                        elif shared.mode == 1:
+                            print("Goal reached! Continuing autonomous mode")
+                        elif shared.mode == 3 and before_pause == 2:
+                            print("Goal reached after the final step! Returning to manual mode from goal mode")
+                            shared.mode = 0
+                        shared.goal = None
+                    finally:
+                        shared.release()
+                map.setstreet(None, None)  # Clear optimal path tree
 
-                if action_cmd == 'l':
-                    turnAngle, _ = behaviors.turn_to_next_street("left")
-                    if not num_streets_to_goal[1]: # Simple turn or exploration's non-accurate turn
-                        current_pose.calcturn(turnAngle, True)
-                        # Heading correction for simple/exploration turns
-                        intersection_after_turn = map_obj.getintersection(current_pose.x, current_pose.y)
-                        if intersection_after_turn and intersection_after_turn.streets[current_pose.heading] == STATUS.NONEXISTENT:
-                            turned_angle_abs = abs(turnAngle)
-                            dh = (current_pose.heading - pose0.heading) % 8
-                            da_lower = (dh - 1) * 45
-                            da_upper = (dh + 1) * 45
-                            if abs(turned_angle_abs - da_lower) < abs(turned_angle_abs - da_upper):
-                                street_check = intersection_after_turn.streets[(current_pose.heading - 1) % 8]
-                                if street_check in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
-                                    current_pose.heading = (current_pose.heading - 1) % 8
-                                    print("Robot thread: Adjusted heading left due to NONEXISTENT street after simple turn.")
-                            else:
-                                street_check = intersection_after_turn.streets[(current_pose.heading + 1) % 8]
-                                if street_check in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
-                                    current_pose.heading = (current_pose.heading + 1) % 8
-                                    print("Robot thread: Adjusted heading right due to NONEXISTENT street after simple turn.")
-                    else: # Accurate turn leg for goal mode or explore mode's accurate turn
-                        current_pose.heading = num_streets_to_goal[1].pop(0)
-                        if not num_streets_to_goal[1]: num_streets_to_goal[0] = 0 
-                    current_street_blocked = behaviors.check_blockage()
-                    if current_street_blocked:
-                        map_obj.check_and_set_blocked(current_pose, current_street_blocked)
-                    map_obj.outcomeA(pose0, current_pose, True)
-
-                elif action_cmd == 'r':
-                    turnAngle, _ = behaviors.turn_to_next_street("right")
-                    if not num_streets_to_goal[1]:
-                        current_pose.calcturn(turnAngle, False)
-                        # Heading correction for simple/exploration turns
-                        intersection_after_turn = map_obj.getintersection(current_pose.x, current_pose.y)
-                        if intersection_after_turn and intersection_after_turn.streets[current_pose.heading] == STATUS.NONEXISTENT:
-                            turned_angle_abs = abs(turnAngle)
-                            dh = (pose0.heading - current_pose.heading) % 8 # Note: dh calculation is different for right turns
-                            da_lower = (dh + 1) * 45 # Adjusted for right turn logic from old_main
-                            da_upper = (dh - 1) * 45 # Adjusted
-                            if abs(turned_angle_abs - da_lower) < abs(turned_angle_abs - da_upper): # Check logic for da_lower/da_upper
-                                street_check = intersection_after_turn.streets[(current_pose.heading + 1) % 8]
-                                if street_check in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
-                                    current_pose.heading = (current_pose.heading + 1) % 8
-                                    print("Robot thread: Adjusted heading right due to NONEXISTENT street after simple turn.")
-                            else:
-                                street_check = intersection_after_turn.streets[(current_pose.heading - 1) % 8]
-                                if street_check in [STATUS.CONNECTED, STATUS.DEADEND, STATUS.UNEXPLORED]:
-                                    current_pose.heading = (current_pose.heading - 1) % 8
-                                    print("Robot thread: Adjusted heading left due to NONEXISTENT street after simple turn.")
-                    else:
-                        current_pose.heading = num_streets_to_goal[1].pop(0)
-                        if not num_streets_to_goal[1]: num_streets_to_goal[0] = 0
-                    current_street_blocked = behaviors.check_blockage()
-                    if current_street_blocked:
-                        map_obj.check_and_set_blocked(current_pose, current_street_blocked)
-                    map_obj.outcomeA(pose0, current_pose, False)
-
-                elif action_cmd == 's':
-                    isUturn, _, road_ahead = behaviors.line_follow()
-                    if not isUturn:
-                        current_pose.calcmove()
-                        current_street_blocked = behaviors.check_blockage()
-                        if current_street_blocked:
-                            map_obj.check_and_set_blocked(current_pose, current_street_blocked)
-                        map_obj.outcomeB(pose0, current_pose, road_ahead)
-                    else:
-                        current_pose.calcuturn()
-                        current_street_blocked = behaviors.check_blockage()
-                        if current_street_blocked:
-                            map_obj.check_and_set_blocked(current_pose, current_street_blocked)
-                        map_obj.outcomeC(pose0, current_pose, road_ahead)
-                
-                if action_cmd: # If an action was actually performed
-
-                    # Update shared map after successful action
-                    if shared.acquire():
-                        try:
-                            shared.map = copy.deepcopy(map_obj)
-                            shared.map.plot(current_pose)
-                        finally:
-                            shared.release()
-            
-            time.sleep(0.1) # Loop delay
-
-    except KeyboardInterrupt:
-        print("Robot thread: Keyboard interrupt. Exiting runrobot.")
-    except Exception as e:
-        print(f"Robot thread: Exception in runrobot: {e}")
-        traceback.print_exc()
-    finally:
-        print("Robot thread: Loop finished. Cleaning up in main.")
-        # Hardware shutdown is handled by the main() function's finally block
+        # maybe change this for checking blocked streets
+        is_blocked = behaviors.check_blockage()
+        if is_blocked:
+            print("HEY ITS BLOCKED!!!!!")
+        map.check_and_set_blocked(pose, is_blocked)
+        # Update visualization after each action
+        map.plot(pose)
 
 
-def main():
-    parser = argparse.ArgumentParser(description="Multithreaded Robot Control")
-    parser.add_argument("--display", action="store_true", help="Display map in real-time using TkAgg backend")
-    parser.add_argument("--x", type=float, default=0.0, help="Initial x-coordinate (default: 0.0)")
-    parser.add_argument("--y", type=float, default=0.0, help="Initial y-coordinate (default: 0.0)")
-    parser.add_argument("--heading", type=int, default=0, choices=range(8), help="Initial heading direction (0-7, default: 0)")
+def main_simple_brain():
+    """
+    Main entry point for the robot navigation and mapping program.
+
+    This function:
+    1. Parses command line arguments
+    2. Initializes hardware components (pigpio, drive system, sensors)
+    3. Creates a map instance
+    4. Runs the simple_brain control loop
+    5. Handles cleanup and exceptions
+
+    Command line arguments:
+        --display: Enable real-time map display using TkAgg backend
+        --x: Initial x-coordinate (default: 0.0)
+        --y: Initial y-coordinate (default: 0.0)
+        --heading: Initial heading direction (0-7, default: 0)
+    """
+    from ui_main import runui
+
+    # Parse command line arguments
+    parser = argparse.ArgumentParser(description="Robot navigation and mapping")
+    parser.add_argument(
+        "--display",
+        action="store_true",
+        help="Display map in real-time using TkAgg backend",
+    )
+    parser.add_argument(
+        "--x",
+        type=float,
+        default=0.0,
+        help="Initial x-coordinate (default: 0.0)",
+    )
+    parser.add_argument(
+        "--y",
+        type=float,
+        default=0.0,
+        help="Initial y-coordinate (default: 0.0)",
+    )
+    parser.add_argument(
+        "--heading",
+        type=int,
+        default=0,
+        help="Initial heading direction (0-7, default: 0)",
+    )
     args = parser.parse_args()
 
+    # Set environment variable for map display
     if args.display:
         os.environ["display_map"] = "on"
         print("Display map enabled - using TkAgg backend")
 
+    # Initialize the pigpio interface
     io = pigpio.pi()
     if not io.connected:
         print("Failed to connect to pigpio daemon. Is it running?")
         return
 
-    print("Hardware: Initializing...")
+    robot = Robot(io)
+    drive_system = DriveSystem(io)
+    sensors = LineSensor(io)
+    adc = ADC(io)
+    proximity_sensor = ProximitySensor(io)
+    behaviors = Behaviors(drive_system, sensors, adc, proximity_sensor)
 
-    robot_hardware = Robot(io) 
-    # Note: DriveSystem and LineSensor are part of robot_hardware
-    adc = ADC(io) 
-    proximity = ProximitySensor(io)
-    behaviors_obj = Behaviors(robot_hardware.drive_system, robot_hardware.sensors, adc, proximity)
-    print("Hardware: Initialization complete.")
-
-    initial_x = args.x
-    initial_y = args.y
-    initial_heading = args.heading
-
-    shared_data = SharedData()
-    shared_data.pose = (initial_x, initial_y, initial_heading) # Initialize shared pose
-
-    ui_thread = threading.Thread(name="UIThread", target=runui, args=(shared_data,))
-    ui_thread.daemon = True 
+    # Create a map instance and pass it to simple_brain
+    shared = SharedData()
+    ui_thread = threading.Thread(target=runui, args=(shared,))
+    ui_thread.daemon = True
     ui_thread.start()
-    print("Main thread: UI worker thread started.")
 
     try:
-        runrobot(shared_data, behaviors_obj, robot_hardware, initial_x, initial_y, initial_heading)
-    except Exception as e:
-        print(f"Main thread: Uncaught exception from runrobot call: {e}")
+        simple_brain(behaviors, robot, shared, args.x, args.y, args.heading)
+    except KeyboardInterrupt:
+        print("\nKeyboard interrupt received. Shutting down...")
+    except BaseException as ex:
+        print("Ending due to exception: %s" % repr(ex))
         traceback.print_exc()
     finally:
-        print("Main thread: runrobot has exited. Initiating shutdown...")
-        # Ensure UI thread knows to quit if it hasn't already
-        if shared_data.acquire():
-            if shared_data.mode != -1: # If not already quitting
-                 print("Main thread: Signaling UI thread to quit.")
-                 shared_data.mode = -1 
-            shared_data.release()
-        
-        print("Main thread: Shutting down hardware...")
-        if hasattr(robot_hardware, 'stop') and callable(getattr(robot_hardware, 'stop')):
-            proximity.shutdown()
-            robot_hardware.stop() # This should also call io.stop()
-        else: # Fallback
-            print("Main thread: robot_hardware.stop() not found or not callable. Attempting manual stop.")
-            if hasattr(robot_hardware, 'drive_system') and hasattr(robot_hardware.drive_system, 'stop'):
-                proximity.shutdown()
-                robot_hardware.drive_system.stop()
-            if hasattr(io, "connected") and io.connected:
-                io.stop()
-        print("Main thread: Hardware shutdown complete.")
-        print("Main thread: Exiting program.")
+        try:
+            # Shutdown cleanly only if still connected
+            if io.connected:
+                robot.stop()
+        except Exception:
+            # If any exception occurs during cleanup, just print it
+            print("Error during cleanup")
+            traceback.print_exc()
+
 
 if __name__ == "__main__":
-    main()
+    main_simple_brain()
