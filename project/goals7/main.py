@@ -273,15 +273,15 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                     if (intersection.streets[heading] == STATUS.UNKNOWN or 
                         (intersection.streets[heading] == STATUS.UNEXPLORED and not intersection.blocked[heading])):
                         all_streets_known = False
-                if all_streets_known:
-                    print("Map fully explored! Returning to manual mode.")
-                    if shared.acquire():
-                        try:
-                            shared.mode = 0
-                            shared.goal = None
-                        finally:
-                            shared.release()
-                    continue
+            if all_streets_known:
+                print("Map fully explored! Returning to manual mode.")
+                if shared.acquire():
+                    try:
+                        shared.mode = 0
+                        shared.goal = None
+                    finally:
+                        shared.release()
+                continue
     
         # If not manual-mode: That is, goal-following, autonomous, step mode
         if mode != 0 and not (mode == 3 and not take_step):
@@ -451,7 +451,7 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                                 nearest = map.find_nearest_unexplored(pose.x, pose.y)
                                 
                                 if nearest is None:
-                                    print("Map fully explored! Returning to manual mode.")
+                                    print("Map fully explored! Returning to manual mode. uhuhuhu")
                                     if shared.acquire():
                                         try:
                                             shared.mode = 0

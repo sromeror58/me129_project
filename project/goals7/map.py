@@ -631,6 +631,7 @@ class Map:
     def has_unexplored_streets(self, x, y):
         """
         Check if the intersection at (x,y) has any unexplored or unknown streets.
+        Excludes blocked streets.
         
         Args:
             x (int): X-coordinate of the intersection
@@ -640,7 +641,8 @@ class Map:
             bool: True if there are unexplored streets, False otherwise
         """
         intersection = self.getintersection(x, y)
-        return any(status in [STATUS.UNKNOWN, STATUS.UNEXPLORED] for status in intersection.streets)
+        return any(status in [STATUS.UNKNOWN, STATUS.UNEXPLORED] and not intersection.blocked[i] 
+                  for i, status in enumerate(intersection.streets))
     
     def get_possible_angles(self, pose, turn_direction=None):
         curr_heading = pose.heading

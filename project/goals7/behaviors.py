@@ -201,6 +201,7 @@ class Behaviors:
         2. Detects intersections and handles them appropriately
         3. Detects the end of streets and initiates U-turns
         4. Adjusts the robot's direction based on sensor readings to stay on the line
+        5. Detects and handles moving obstacles by stopping and resuming when clear
 
         Returns:
             tuple: (isUturn, travel_time) where:
@@ -211,59 +212,76 @@ class Behaviors:
         side_estimator = SideEstimator()
         eos_estimator = EndOfStreetEstimator()
 
+        # Obstacle detection thresholds (in meters)
+        STOP_THRESHOLD = 0.15  # Stop when obstacle is within 15cm
+        RESUME_THRESHOLD = 0.25  # Resume when obstacle is beyond 25cm
+        
         t0 = time.time()
+        is_stopped = False  # Track if robot is currently stopped due to obstacle
+
         while True:
             reading = self.sensors.read()
+            
+            # Check for obstacles ahead using proximity sensor
+            _, middle_distance, _ = self.proximity_sensor.read()
+            
+            if middle_distance is not None:
+                if middle_distance < STOP_THRESHOLD and not is_stopped:
+                    # Stop the robot when obstacle detected
+                    print(f"Obstacle detected at {middle_distance:.2f}m - stopping")
+                    self.drive_system.stop()
+                    is_stopped = True
+                elif middle_distance > RESUME_THRESHOLD and is_stopped:
+                    # Resume driving when obstacle clears
+                    print(f"Obstacle cleared at {middle_distance:.2f}m - resuming")
+                    is_stopped = False
 
-            # Check for intersection
-            if intersection_estimator.update(reading, 0.11):
-                curr = time.time()
-                # Then pull forward
-                # road_state = self.pull_forward(travel_time=0.38)
-                road_state = self.pull_forward(travel_time=0.55)
+            # Only update detectors and drive if not stopped
+            if not is_stopped:
+                # Check for intersection
+                if intersection_estimator.update(reading, 0.11):
+                    curr = time.time()
+                    # Then pull forward
+                    road_state = self.pull_forward(travel_time=0.55)
+                    return False, curr - t0, road_state
 
-                # isUturn, travel time, if road is ahead
-                return False, curr - t0, road_state
+                # Estimate which side of the road the robot is on
+                side = side_estimator.update(reading, 0.05)
 
-            # Estimate which side of the road the robot is on
-            side = side_estimator.update(reading, 0.05)
-            # print(f"Road side: {side}")
+                # Check for end of street
+                if eos_estimator.update(reading, side, 0.15):
+                    road_state = self.pull_forward(travel_time=0.6)
+                    curr = time.time()
+                    print("End of street detected!")
+                    self.turn_to_next_street("left")
+                    _, _, road_state = self.line_follow()
+                    self.drive_system.stop()
+                    return True, curr - t0, road_state
 
-            # Check for end of street
-            if eos_estimator.update(reading, side, 0.15):
-                road_state = self.pull_forward(travel_time=0.6)
-                curr = time.time()
-                print("End of street detected!")
-                self.turn_to_next_street("left")
-                _, _, road_state = self.line_follow()
-                self.drive_system.stop()
-
-                # isUturn, travel time of street, if road is ahead from
-                return True, curr - t0, road_state
-
-            if reading == (0, 1, 0):
-                self.drive_system.drive(STRAIGHT)
-            elif reading == (1, 1, 1):
-                self.drive_system.drive(STRAIGHT)
-            elif reading == (0, 1, 1):
-                self.drive_system.drive(TURN_R)
-            elif reading == (0, 0, 1):
-                self.drive_system.drive(HOOK_R)
-            elif reading == (1, 1, 0):
-                self.drive_system.drive(TURN_L)
-            elif reading == (1, 0, 0):
-                self.drive_system.drive(HOOK_L)
-            elif reading == (0, 0, 0):
-                # When all sensors read 0, use the road side estimator to decide what to do
-                if side == SideEstimator.LEFT:
-                    # If pushed to the left, turn or hook right to get back to center
-                    self.drive_system.drive(HOOK_R)
-                elif side == SideEstimator.RIGHT:
-                    # If pushed to the right, turn or hook left to get back to center
-                    self.drive_system.drive(HOOK_L)
-                else:
-                    # If centered, keep going straight
+                # Normal line following behavior
+                if reading == (0, 1, 0):
                     self.drive_system.drive(STRAIGHT)
-            else:
-                # considering the other 3 cases i.e. 101, 111, and 000
-                self.drive_system.stop()
+                elif reading == (1, 1, 1):
+                    self.drive_system.drive(STRAIGHT)
+                elif reading == (0, 1, 1):
+                    self.drive_system.drive(TURN_R)
+                elif reading == (0, 0, 1):
+                    self.drive_system.drive(HOOK_R)
+                elif reading == (1, 1, 0):
+                    self.drive_system.drive(TURN_L)
+                elif reading == (1, 0, 0):
+                    self.drive_system.drive(HOOK_L)
+                elif reading == (0, 0, 0):
+                    # When all sensors read 0, use the road side estimator to decide what to do
+                    if side == SideEstimator.LEFT:
+                        # If pushed to the left, turn or hook right to get back to center
+                        self.drive_system.drive(HOOK_R)
+                    elif side == SideEstimator.RIGHT:
+                        # If pushed to the right, turn or hook left to get back to center
+                        self.drive_system.drive(HOOK_L)
+                    else:
+                        # If centered, keep going straight
+                        self.drive_system.drive(STRAIGHT)
+                else:
+                    # considering the other 3 cases i.e. 101, 111, and 000
+                    self.drive_system.stop()
