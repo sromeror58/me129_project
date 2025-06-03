@@ -15,7 +15,6 @@ from proximitysensor import ProximitySensor
 from ui_main import SharedData
 import threading
 from ros import runros
-from directed_explore import directed_explore
 
 class Robot:
     """
@@ -298,9 +297,7 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                                 shared.take_step = False
                             finally:
                                 shared.release()
-                    # Check if goal exists in the map to determine if this is directed exploration
-                    is_directed_exploration = goal not in map.intersections
-                    
+
                     if (pose.x, pose.y) == goal:
 
                         # If was in goal mode, go to manual
@@ -321,69 +318,64 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                         map.setstreet(None, None)  # Clear optimal path tree
                         map.plot(pose)
                         continue
-                    if not is_directed_exploration:
-                        map.setstreet(goal[0], goal[1])
-                        # We haven't reached goal, so get current intersection and check optimal direction
-                        current = map.getintersection(pose.x, pose.y)
-                        if current.direction is not None:
 
-                            # If current heading doesn't match optimal direction, need to turn
-                            if pose.heading != current.direction:
+                    map.setstreet(goal[0], goal[1])
+                    # We haven't reached goal, so get current intersection and check optimal direction
+                    current = map.getintersection(pose.x, pose.y)
+                    if current.direction is not None:
 
-                                # If we haven't already, calculate number of turns needed
-                                if not num_streets_to_goal[1]:
+                        # If current heading doesn't match optimal direction, need to turn
+                        if pose.heading != current.direction:
 
-                                    current_heading = pose.heading
-                                    streets_encountered = 0
+                            # If we haven't already, calculate number of turns needed
+                            if not num_streets_to_goal[1]:
 
-                                    # Calculate the difference in heading turning left
-                                    heading_diff = (current.direction - current_heading) % 8
+                                current_heading = pose.heading
+                                streets_encountered = 0
 
-                                    if heading_diff <= 4:
-                                        num_streets_to_goal[0] = 1 # Left turns
-                                    else:
-                                        num_streets_to_goal[0] = -1 # Right turns
+                                # Calculate the difference in heading turning left
+                                heading_diff = (current.direction - current_heading) % 8
 
-                                    # Get list of streets encountered when turning in intended direction
-                                    while current_heading != current.direction:
-                                        current_heading = (current_heading + num_streets_to_goal[0]) % 8
-                                        if current.streets[current_heading] != STATUS.NONEXISTENT: # Assuming streets have been mapped
-                                            num_streets_to_goal[1].append(current_heading)
-                                    
-                                if num_streets_to_goal[0] > 0:
-                                    command = 'left'  # Turn left
+                                if heading_diff <= 4:
+                                    num_streets_to_goal[0] = 1 # Left turns
                                 else:
-                                    command = 'right'  # Turn right
+                                    num_streets_to_goal[0] = -1 # Right turns
 
+                                # Get list of streets encountered when turning in intended direction
+                                while current_heading != current.direction:
+                                    current_heading = (current_heading + num_streets_to_goal[0]) % 8
+                                    if current.streets[current_heading] != STATUS.NONEXISTENT: # Assuming streets have been mapped
+                                        num_streets_to_goal[1].append(current_heading)
+                                
+                            if num_streets_to_goal[0] > 0:
+                                command = 'left'  # Turn left
                             else:
-                                print("Going straight along optimal path")
-                                command = 'straight'
+                                command = 'right'  # Turn right
+
                         else:
-                            if taking_step:
-                                print("No valid path to goal. No step taken: clearing goal and staying in paused.")
-                                if shared.acquire():
-                                    try:
-                                        shared.goal = None
-                                        shared.mode = 0
-                                    finally:
-                                        shared.release()
-                            else:
-                                print("No valid path to goal. Returning to manual mode.")
-                                if shared.acquire():
-                                    try:
-                                        shared.goal = None
-                                        shared.mode = 0
-                                    finally:
-                                        shared.release()
-                            map.setstreet(None, None)  # Clear optimal path tree
-                            map.plot(pose)
-                            continue
+                            print("Going straight along optimal path")
+                            command = 'straight'
                     else:
-                        # Directed exploration: Goal doesn't exist in map yet
-                        # Use exploration logic but biased toward the goal
-                        is_directed_exploration, optimal_command = directed_explore(map, pose, goal, command, shared)
-                        if is_directed_exploration:
-                            command = optimal_command
+                        if taking_step:
+                            print("No valid path to goal. No step taken: clearing goal and staying in paused.")
+                            if shared.acquire():
+                                try:
+                                    shared.goal = None
+                                    shared.mode = 0
+                                finally:
+                                    shared.release()
+                        else:
+                            print("No valid path to goal. Returning to manual mode.")
+                            if shared.acquire():
+                                try:
+                                    shared.goal = None
+                                    shared.mode = 0
+                                finally:
+                                    shared.release()
+                        map.setstreet(None, None)  # Clear optimal path tree
+                        map.plot(pose)
+                        continue
+
                 else:
                     if mode == 1 or take_step:
 
@@ -600,7 +592,7 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                 check_distance = .35
             else:
                 # check_distance = .90
-                check_distance = .65
+                check_distance = .7
             blocked = behaviors.check_blockage(distance=check_distance)
             if blocked: 
                 print("Cannot go straight: Double check revealed blockage!")

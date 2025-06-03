@@ -14,7 +14,7 @@ import time
 from proximitysensor import ProximitySensor
 from ui_main import SharedData
 import threading
-import math
+from ros import runros
 
 class Robot:
     """
@@ -141,6 +141,11 @@ def choose_best_angle(time_estimate, mag_estimate, angles, pose):
     weight_time = 0.3
     weight_mag = 0.7
 
+    # Convert 360 degree angles to 0 degree
+    # change to this and fix if we have turns > 360
+    # angles = [0 if abs(angle) >= 360 else angle for angle in angles]
+    # angles = [0 if abs(angle) == 360 else angle for angle in angles]
+
     # Adjust weights if it's detected as a near full turn
     if abs(mag_estimate) <= 25 and abs(time_estimate) >= 120:
         print("BAM 360 turn")
@@ -155,40 +160,6 @@ def choose_best_angle(time_estimate, mag_estimate, angles, pose):
     best_angle = min(angles, key=lambda angle: abs(weighted_average - angle))
     print(f'Chosen best angle: {best_angle}')
     return best_angle, (pose.heading + best_angle//45) % 8
-
-
-def calculate_heading_toward_goal(current_x, current_y, goal_x, goal_y):
-    """
-    Calculate the best heading (0-7) to move toward the goal from current position.
-    
-    Args:
-        current_x, current_y: Current position
-        goal_x, goal_y: Goal position
-        
-    Returns:
-        int: Heading (0-7) that points most directly toward the goal
-    """
-    dx = goal_x - current_x
-    dy = goal_y - current_y
-    
-    # Handle edge case where we're already at the goal
-    if dx == 0 and dy == 0:
-        return None
-    
-    # Calculate angle in radians, then convert to degrees
-    angle_rad = math.atan2(dy, dx)
-    angle_deg = math.degrees(angle_rad)
-    
-    # Convert to compass heading (0 = North = +Y, clockwise)
-    # atan2 gives us: 0° = East (+X), 90° = North (+Y), ±180° = West (-X), -90° = South (-Y)
-    compass_deg = (90 - angle_deg) % 360
-    
-    # Convert to 8-direction heading (0-7)
-    # Add 22.5 to round to nearest 45° heading
-    heading = int((compass_deg + 22.5) / 45) % 8
-    
-    return heading
-
 
 def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
     """
@@ -212,9 +183,6 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
 
     goal = None  # Track current goal coordinates
     num_streets_to_goal = [0, []] # Track turns needed to get to goal
-    is_directed_exploration = False  # Track if we're doing directed exploration
-    failed_targets = set()  # Keep track of exploration targets we couldn't reach
-    last_position = None  # Track last position to detect if we're stuck
 
     shared.mode = 0
 
@@ -330,10 +298,8 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                             finally:
                                 shared.release()
 
-                    # Check if goal exists in the map to determine if this is directed exploration
-                    is_directed_exploration = goal not in map.intersections
-
                     if (pose.x, pose.y) == goal:
+
                         # If was in goal mode, go to manual
                         # If was in autonomous mode, clear goal
                         if shared.acquire():
@@ -350,187 +316,65 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                             finally:
                                 shared.release()
                         map.setstreet(None, None)  # Clear optimal path tree
-                        is_directed_exploration = False
                         map.plot(pose)
                         continue
 
-                    # If goal exists in map and we can use Dijkstra's
-                    if not is_directed_exploration:
-                        map.setstreet(goal[0], goal[1])
-                        # We haven't reached goal, so get current intersection and check optimal direction
-                        current = map.getintersection(pose.x, pose.y)
-                        if current.direction is not None:
+                    map.setstreet(goal[0], goal[1])
+                    # We haven't reached goal, so get current intersection and check optimal direction
+                    current = map.getintersection(pose.x, pose.y)
+                    if current.direction is not None:
 
-                            # If current heading doesn't match optimal direction, need to turn
-                            if pose.heading != current.direction:
+                        # If current heading doesn't match optimal direction, need to turn
+                        if pose.heading != current.direction:
 
-                                # If we haven't already, calculate number of turns needed
-                                if not num_streets_to_goal[1]:
+                            # If we haven't already, calculate number of turns needed
+                            if not num_streets_to_goal[1]:
 
-                                    current_heading = pose.heading
-                                    streets_encountered = 0
+                                current_heading = pose.heading
+                                streets_encountered = 0
 
-                                    # Calculate the difference in heading turning left
-                                    heading_diff = (current.direction - current_heading) % 8
+                                # Calculate the difference in heading turning left
+                                heading_diff = (current.direction - current_heading) % 8
 
-                                    if heading_diff <= 4:
-                                        num_streets_to_goal[0] = 1 # Left turns
-                                    else:
-                                        num_streets_to_goal[0] = -1 # Right turns
-
-                                    # Get list of streets encountered when turning in intended direction
-                                    while current_heading != current.direction:
-                                        current_heading = (current_heading + num_streets_to_goal[0]) % 8
-                                        if current.streets[current_heading] != STATUS.NONEXISTENT: # Assuming streets have been mapped
-                                            num_streets_to_goal[1].append(current_heading)
-                                    
-                                if num_streets_to_goal[0] > 0:
-                                    command = 'left'  # Turn left
+                                if heading_diff <= 4:
+                                    num_streets_to_goal[0] = 1 # Left turns
                                 else:
-                                    command = 'right'  # Turn right
+                                    num_streets_to_goal[0] = -1 # Right turns
 
+                                # Get list of streets encountered when turning in intended direction
+                                while current_heading != current.direction:
+                                    current_heading = (current_heading + num_streets_to_goal[0]) % 8
+                                    if current.streets[current_heading] != STATUS.NONEXISTENT: # Assuming streets have been mapped
+                                        num_streets_to_goal[1].append(current_heading)
+                                
+                            if num_streets_to_goal[0] > 0:
+                                command = 'left'  # Turn left
                             else:
-                                print("Going straight along optimal path")
-                                command = 'straight'
+                                command = 'right'  # Turn right
+
                         else:
-                            # No valid path exists, but this is regular goal following
-                            if taking_step:
-                                print("No valid path to goal. No step taken: clearing goal and staying in paused.")
-                                if shared.acquire():
-                                    try:
-                                        shared.goal = None
-                                        shared.mode = 0
-                                    finally:
-                                        shared.release()
-                            else:
-                                print("No valid path to goal. Returning to manual mode.")
-                                if shared.acquire():
-                                    try:
-                                        shared.goal = None
-                                        shared.mode = 0
-                                    finally:
-                                        shared.release()
-                            map.setstreet(None, None)  # Clear optimal path tree
-                            is_directed_exploration = False
-                            map.plot(pose)
-                            continue
+                            print("Going straight along optimal path")
+                            command = 'straight'
                     else:
-                        # Directed exploration: Goal doesn't exist in map yet
-                        # Use exploration logic but biased toward the goal
-                        goal_heading = calculate_heading_toward_goal(pose.x, pose.y, goal[0], goal[1])
-                        
-                        # Check if we've reached the goal first
-                        if (pose.x, pose.y) == goal:
+                        if taking_step:
+                            print("No valid path to goal. No step taken: clearing goal and staying in paused.")
                             if shared.acquire():
                                 try:
-                                    shared.mode = 0
-                                    print("Goal reached! Returning to manual mode")
                                     shared.goal = None
+                                    shared.mode = 0
                                 finally:
                                     shared.release()
-                            map.setstreet(None, None)  # Clear optimal path tree
-                            is_directed_exploration = False
-                            map.plot(pose)
-                            continue
-                        
-                        # In the process of making an accurate turn
-                        if num_streets_to_goal[1]:
-                            command = "left" if num_streets_to_goal[0] > 0 else "right"
                         else:
-                            # Get unexplored streets
-                            unexplored_streets = map.get_unexplored_streets(pose.x, pose.y)
-                            
-                            if unexplored_streets:
-                                # Find the unexplored street that points most toward the goal
-                                best_heading = None
-                                min_diff = float('inf')
-                                
-                                for heading, status in unexplored_streets:
-                                    if goal_heading is not None:
-                                        diff = min((heading - goal_heading) % 8, (goal_heading - heading) % 8)
-                                        if diff < min_diff:
-                                            min_diff = diff
-                                            best_heading = heading
-                                    else:
-                                        best_heading = heading
-                                        break
-                                
-                                if best_heading == pose.heading:
-                                    # Try to go straight if not blocked
-                                    if not map.getintersection(pose.x, pose.y).blocked[best_heading]:
-                                        command = "straight"
-                                    else:
-                                        print("Cannot go straight: street is blocked!")
-                                        map.getintersection(pose.x, pose.y).updateStreet(best_heading, STATUS.BLOCKED)
-                                        continue
-                                else:
-                                    # Turn toward the best heading
-                                    heading_diff = (best_heading - pose.heading) % 8
-                                    command = "left" if heading_diff <= 4 else "right"
-                                    
-                                    # Set up for accurate turn if possible
-                                    current_heading = pose.heading
-                                    num_streets_to_goal[0] = 1 if heading_diff <= 4 else -1
-                                    
-                                    # Check if we can make an accurate turn
-                                    current_intersection = map.getintersection(pose.x, pose.y)
-                                    can_make_accurate_turn = True
-                                    
-                                    while current_heading != best_heading:
-                                        current_heading = (current_heading + num_streets_to_goal[0]) % 8
-                                        if current_intersection.streets[current_heading] == STATUS.UNKNOWN:
-                                            can_make_accurate_turn = False
-                                            break
-                                        elif current_intersection.streets[current_heading] != STATUS.NONEXISTENT:
-                                            num_streets_to_goal[1].append(current_heading)
-                                    
-                                    if not can_make_accurate_turn or current_intersection.streets[best_heading] != STATUS.UNEXPLORED:
-                                        num_streets_to_goal[1] = []
-                            else:
-                                # No local unexplored streets, find nearest unexplored intersection
-                                nearest = map.find_nearest_unexplored(pose.x, pose.y)
-                                
-                                if nearest is None:
-                                    # Try one last time with regular pathfinding
-                                    map.setstreet(goal[0], goal[1])
-                                    if map.getintersection(pose.x, pose.y).direction is None:
-                                        print("Goal appears unreachable. All paths exhausted.")
-                                        if shared.acquire():
-                                            try:
-                                                shared.mode = 0
-                                                shared.goal = None
-                                            finally:
-                                                shared.release()
-                                        is_directed_exploration = False
-                                    else:
-                                        is_directed_exploration = False
-                                        print("Found a path to goal! Switching to regular goal following.")
-                                else:
-                                    # Check if we're stuck
-                                    current_pos = (pose.x, pose.y)
-                                    if current_pos == last_position:
-                                        print("Stuck in same position, trying different target...")
-                                        # Try to find a different target
-                                        temp_intersection = map.getintersection(pose.x, pose.y)
-                                        temp_streets = temp_intersection.streets.copy()
-                                        temp_intersection.streets = [STATUS.CONNECTED] * 8
-                                        nearest = map.find_nearest_unexplored(pose.x, pose.y)
-                                        temp_intersection.streets = temp_streets
-                                        
-                                        if nearest is None:
-                                            print("No alternative paths found. Goal may be unreachable.")
-                                            if shared.acquire():
-                                                try:
-                                                    shared.mode = 0
-                                                    shared.goal = None
-                                                finally:
-                                                    shared.release()
-                                            is_directed_exploration = False
-                                            continue
-                                    
-                                    last_position = current_pos
-                                    map.setstreet(nearest[0], nearest[1])
-                                    print(f"Navigating to exploration target at {nearest} (toward goal at {goal})")
+                            print("No valid path to goal. Returning to manual mode.")
+                            if shared.acquire():
+                                try:
+                                    shared.goal = None
+                                    shared.mode = 0
+                                finally:
+                                    shared.release()
+                        map.setstreet(None, None)  # Clear optimal path tree
+                        map.plot(pose)
+                        continue
 
                 else:
                     if mode == 1 or take_step:
@@ -655,7 +499,6 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
             time_turn_estimate = turn_fit(turn_time)
             # print(f'time turn estimate: {time_turn_estimate} degrees')
             print(f'Turn time: {turn_time}\t time-based turn:{time_turn_estimate}\t mag-based turn:{turnAngle}\t list of angles:{possible_headings}')
-            # chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, possible_headings)
             chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, [angle for _, angle in possible_angles], pose)
             if not num_streets_to_goal[1]: # If turning without goal-following
                 pose.calcturn(chosen_angle, True)
@@ -706,9 +549,8 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
             time_turn_estimate = -1 * turn_fit(turn_time)
             # print(f'time turn estimate: {time_turn_estimate} degrees')
             print(f'Turn time: {turn_time}\t time-based turn:{time_turn_estimate}\t mag-based turn:{turnAngle}\t list of angles:{possible_headings}')
-            # chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, possible_headings)
             chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, [angle for _, angle in possible_angles], pose)
-            print(f'Chosen angle: {chosen_angle}')
+            # print(f'Chosen angle: {chosen_angle}')
             if not num_streets_to_goal[1]:
                 pose.calcturn(chosen_angle, True)
             else:
@@ -746,9 +588,11 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
 
             # 8.2a: Before driving down a street, always double check for blockage
             if current_heading % 2 == 0:
-                check_distance = .65
+                # check_distance = .65
+                check_distance = .35
             else:
-                check_distance = .90
+                # check_distance = .90
+                check_distance = .7
             blocked = behaviors.check_blockage(distance=check_distance)
             if blocked: 
                 print("Cannot go straight: Double check revealed blockage!")
@@ -757,18 +601,14 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                         shared.command = None
                     finally:
                         shared.release()
+                # maybe fix this for edge case when we are at an intersection and try to move forward
+                # but it marks it as blocked instead of waiting for blockage to leave
                 map.getintersection(pose.x, pose.y).updateStreet(current_heading, STATUS.BLOCKED)
                 map.plot(pose)
                 # If we have a goal, recalculate path
                 if goal is not None:
                     print("Recalculating path to goal after encountering blocked street...")
-                    if is_directed_exploration:
-                        # Find new exploration target
-                        nearest = map.find_nearest_unexplored(pose.x, pose.y)
-                        if nearest:
-                            map.setstreet(nearest[0], nearest[1])
-                    else:
-                        map.setstreet(goal[0], goal[1])
+                    map.setstreet(goal[0], goal[1])
                 continue 
 
             if current.streets[current_heading] in [STATUS.NONEXISTENT, STATUS.BLOCKED]:
@@ -781,13 +621,7 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                 # If we have a goal, recalculate path
                 if goal is not None:
                     print("Recalculating path to goal after encountering blocked street...")
-                    if is_directed_exploration:
-                        # Find new exploration target
-                        nearest = map.find_nearest_unexplored(pose.x, pose.y)
-                        if nearest:
-                            map.setstreet(nearest[0], nearest[1])
-                    else:
-                        map.setstreet(goal[0], goal[1])
+                    map.setstreet(goal[0], goal[1])
                 continue
 
             print("Going Straight")
@@ -825,12 +659,17 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                     finally:
                         shared.release()
                 map.setstreet(None, None)  # Clear optimal path tree
-                is_directed_exploration = False
 
-        # maybe change this for checking blocked streets
-        is_blocked = behaviors.check_blockage()
-        map.check_and_set_blocked(pose, is_blocked)
+        # # maybe change this for checking blocked streets
+        # is_blocked = behaviors.check_blockage()
+        # map.check_and_set_blocked(pose, is_blocked)
         # Update visualization after each action
+        if shared.acquire():
+            # Copy the robot’s current pose.
+            shared.robotx = copy.deepcopy(pose.x) 
+            shared.roboty = copy.deepcopy(pose.y) 
+            shared.robotheading = copy.deepcopy(pose.heading)
+            shared.release()
         map.plot(pose)
 
 
@@ -898,8 +737,11 @@ def main_simple_brain():
     proximity_sensor = ProximitySensor(io)
     behaviors = Behaviors(drive_system, sensors, adc, proximity_sensor)
 
-    # Create a map instance and pass it to simple_brain
     shared = SharedData()
+    # Start the ROS worker thread.
+    rosthread = threading.Thread(name="ROSThread", target=runros, args=(shared,))
+    rosthread.start()
+    
     ui_thread = threading.Thread(target=runui, args=(shared,))
     ui_thread.daemon = True
     ui_thread.start()
@@ -916,6 +758,10 @@ def main_simple_brain():
             # Shutdown cleanly only if still connected
             if io.connected:
                 robot.stop()
+            # End the ROS thread (send the KeyboardInterrupt exception).
+            ctypes.pythonapi.PyThreadState_SetAsyncExc(
+            ctypes.c_long(rosthread.ident), ctypes.py_object(KeyboardInterrupt))
+            rosthread.join()
         except Exception:
             # If any exception occurs during cleanup, just print it
             print("Error during cleanup")
