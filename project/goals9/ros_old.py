@@ -1,17 +1,15 @@
 #!/usr/bin/env python3
 #
-#   ros.py      ** EXPANDED**
+#   ros.py
 #
-#   Set up a simple ROS node to listen for goal/explore/dicts/fetch
-#   commands and publish the current pose (position and heading).
+#   Set up a very simple ROS node to listen for goal/explore commands
+#   and publish the current pose (position and heading).
 #
 #   Node:       /PINAME         (this will use your Pi's name)
 #
 #   Publish:    ~/pose                  geometry_msgs/Pose
 #   Subscribe:  ~/goal                  geometry_msgs/Point
 #   Subscribe:  ~/explore               std_msgs/Empty
-#   Subscribe:  ~/fetch                 std_msgs/UInt32
-#   Subscribe:  ~/dicts                 std_msgs/String
 #
 import ctypes
 import os
@@ -19,7 +17,6 @@ import rclpy
 import socket
 import time
 import threading
-import json
 import copy
 
 from math import pi, sin, cos
@@ -27,7 +24,7 @@ from math import pi, sin, cos
 from rclpy.node                 import Node
 from rclpy.time                 import Time, Duration
 from geometry_msgs.msg          import Point, Pose
-from std_msgs.msg               import Empty, String, UInt32
+from std_msgs.msg               import Empty
 
 
 #
@@ -46,10 +43,8 @@ class ROSNode(Node):
         self.pub = self.create_publisher(Pose, '~/pose', 10)
 
         # Then create subscribers for goal and explore commands.
-        self.create_subscription(Point,  '~/goal',    self.cb_goal,    10)
-        self.create_subscription(Empty,  '~/explore', self.cb_explore, 10)
-        self.create_subscription(UInt32, '~/fetch',   self.cb_fetch,   10)
-        self.create_subscription(String, '~/dicts',   self.cb_dicts,   10)
+        self.create_subscription(Point, '~/goal',    self.cb_goal,    10)
+        self.create_subscription(Empty, '~/explore', self.cb_explore, 10)
 
         # Finally create a timer to drive the node.
         self.timer = self.create_timer(1.0, self.cb_timer)
@@ -129,57 +124,13 @@ class ROSNode(Node):
                 self.shared.release()
 
 
-    def cb_fetch(self, msg):
-        # Extract the prize ID from the message.
-        prize = msg.data
-
-        # Report.
-        self.get_logger().info("Received fetch command (%d)" % (prize))
-
-        # Place in shared data!
-        if self.shared.acquire():
-            self.shared.mode = 5
-            self.shared.fetch = prize
-            print("Starting ROS fetch mode")
-            self.shared.release()
-
-
-    def cb_dicts(self, msg):
-        # Grab the raw message data.
-        raw_data = json.loads(msg.data)
-
-        # Extract the  intersection: prize -> distance  dictionary
-        raw_dist_dict = raw_data["dist_dict"]
-        inter_prize_distance_dict = {
-            int(key): {
-                int(prize_key): raw_dist_dict[key][prize_key]
-                for prize_key in raw_dist_dict[key]}
-            for key in raw_dist_dict}
-
-        # Extract the  prize: info  dictionary
-        raw_info_dict = raw_data["info_dict"]
-        prize_info_dict = {
-            int(key): raw_info_dict[key] for key in raw_info_dict}
-
-        # Report.
-        # self.get_logger().info("Received dicts message")
-        # self.get_logger().info(f"DISTANCES: {inter_prize_distance_dict}")
-        # self.get_logger().info(f"INFO: {prize_info_dict}")
-
-        # Place in shared data!
-        if self.shared.acquire():
-            self.shared.dist_dict = inter_prize_distance_dict
-            self.shared.info_dict = raw_info_dict
-            # print("Storing prize-dictionaties through ROS")
-            self.shared.release()
-
 
 #
 #   Main ROS Thread Code
 #
 def runros(shared):
     # Setup network access for ROS on domain #1.
-    os.environ['ROS_AUTOMATIC_DISCOVERY_RANGE']='SUBNET'
+    os.environ['ROS_LOCALHOST_ONLY']='0'
     os.environ['ROS_DOMAIN_ID']='1'
 
     # Initialize ROS.

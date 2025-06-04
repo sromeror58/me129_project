@@ -159,12 +159,12 @@ class Map:
             next_intersection = self.getintersection(next_x, next_y)
             opposite_heading = (h + 4) % 8
             if is_blocked:
-                # print("YO WE HERE AAAAA!!!!")
+                print("YO WE HERE AAAAA!!!!")
                 intersection.updateStreet(h, STATUS.BLOCKED)
                 if next_intersection.streets[opposite_heading] not in [STATUS.UNKNOWN, STATUS.NONEXISTENT]:
                     next_intersection.updateStreet(opposite_heading, STATUS.BLOCKED)
             elif next_intersection.blocked[opposite_heading]:
-                # print("YO WE HERE BBBBB!!!!")
+                print("YO WE HERE BBBBB!!!!")
                 intersection.updateStreet(h, STATUS.BLOCKED)
             
     def clear_blocked(self):
@@ -701,7 +701,23 @@ class Map:
         return [(h, intersection.streets[h]) for h in range(8) 
                 if intersection.streets[h] in [STATUS.UNKNOWN, STATUS.UNEXPLORED] 
                 and not intersection.blocked[h]]
-
+    
+    def get_potential_streets(self, x, y):
+        """
+        Get a list of headings with unexplored or connected streets at the intersection.
+        Excludes blocked streets.
+        
+        Args:
+            x (int): X-coordinate of the intersection
+            y (int): Y-coordinate of the intersection
+            
+        Returns:
+            tuple: (street heading, street status) for each unexplored street
+        """
+        intersection = self.getintersection(x, y)
+        return [(h, intersection.streets[h]) for h in range(8) 
+                if intersection.streets[h] in [STATUS.UNEXPLORED, STATUS.CONNECTED] 
+                and not intersection.blocked[h]]
     
     def find_nearest_unexplored(self, start_x, start_y):
         """

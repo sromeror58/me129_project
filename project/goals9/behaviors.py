@@ -15,6 +15,8 @@ from config import (
     HOOK_R,
     SPIN_L,
     SPIN_R,
+    STEER_R,
+    STEER_L
 )
 
 
@@ -27,7 +29,7 @@ class Behaviors:
     the drive system, sensors, and magnetometer to implement these behaviors.
     """
 
-    def __init__(self, drive_system, sensors, adc, proximity_sensor):
+    def __init__(self, drive_system, sensors, adc, proximity_sensor, nfc_sensor):
         """
         Initialize the Behaviors class with the necessary components.
 
@@ -36,11 +38,13 @@ class Behaviors:
             sensors: The robot's sensors for environmental perception
             adc: The analog-to-digital converter for magnetometer readings
             proximity_sensor: The robot's proximity sensor for obstacle detection
+            nfc_sensor: The robot's NFC Sensor for identifying it's current Intersection ID
         """
         self.drive_system = drive_system
         self.sensors = sensors
         self.adc = adc
         self.proximity_sensor = proximity_sensor
+        self.nfc_sensor = nfc_sensor
 
     def turn_to_next_street(self, direction):
         """
@@ -57,7 +61,9 @@ class Behaviors:
             direction (str): Direction to turn, either 'left' or 'right'
 
         Returns:
-            float: The calculated turn angle in degrees
+            tuple:
+                - float: The calculated turn angle in degrees, based on magnetometer data
+                - float: Duration in seconds taken to complete the turn
         """
         # Validate and convert the direction parameter
         if direction.lower() == "left":
@@ -132,18 +138,12 @@ class Behaviors:
                 self.drive_system.stop()
                 break
             elif reading == (0, 1, 1):
-                # self.drive_system.drive(TURN_R)
                 self.drive_system.drive(SPIN_R)
-                # self.drive_system.drive(HOOK_R)
             elif reading == (0, 0, 1):
-                # self.drive_system.drive(HOOK_R)
                 self.drive_system.drive(SPIN_R)
             elif reading == (1, 1, 0):
-                # self.drive_system.drive(TURN_L)
-                # self.drive_system.drive(HOOK_L)
                 self.drive_system.drive(SPIN_L)
             elif reading == (1, 0, 0):
-                # self.drive_system.drive(HOOK_L)
                 self.drive_system.drive(SPIN_L)
         
 
@@ -158,11 +158,23 @@ class Behaviors:
         Args:
             travel_time (float): Amount of time in seconds to pull forward.
                                Defaults to 0.5 seconds.
+        Returns:
+            tuple:
+                - bool: True if road still exists ahead, False otherwise
+                - NFC ID: The detected intersection ID from the NFC sensor, or None if not available
         """
+        # self.drive_system.stop()
+        # time.sleep(0.2)
         street_detector = StreetDetector()
         t_0 = time.time()
         curr = time.time()
+        # reading the intersection ID
+        nfc_id = None
+        
         while curr - t_0 <= travel_time:
+            intersection_id = self.nfc_sensor.read()
+            if intersection_id:
+                nfc_id = intersection_id
             self.drive_system.drive(STRAIGHT)
             curr = time.time()
             # This means that there is still road that the sensor is picking up
@@ -170,8 +182,8 @@ class Behaviors:
             street_detector.update(readings)
         self.drive_system.stop()
         readings = 1.0 if sum(self.sensors.read()) >= 1.0 else 0.0
-        print(street_detector.update(readings))
-        return street_detector.update(readings)
+        print(f'road state: {street_detector.update(readings)}')
+        return street_detector.update(readings), nfc_id
 
     def check_blockage(self, distance: float = 0.4):
         """
@@ -202,12 +214,13 @@ class Behaviors:
         3. Detects the end of streets and initiates U-turns
         4. Adjusts the robot's direction based on sensor readings to stay on the line
         5. Detects and handles moving obstacles by stopping and resuming when clear
-
+        
         Returns:
-            tuple: (isUturn, travel_time, road_ahead) where:
+            tuple (isUturn, travel_time, road_ahead, intersection_id) where:
                 - isUturn (bool): True if a U-turn was performed, False otherwise
                 - travel_time (float): Time spent following the line in seconds
                 - road_ahead (bool): whether there is a road ahead after pulling forward
+                - intersection_id (NFC ID): The detected intersection ID from the NFC sensor, or None if not available
         """
         intersection_estimator = IntersectionEstimator()
         side_estimator = SideEstimator()
@@ -240,24 +253,25 @@ class Behaviors:
             # Only update detectors and drive if not stopped
             if not is_stopped:
                 # Check for intersection
-                if intersection_estimator.update(reading, 0.15):
+                if intersection_estimator.update(reading, 0.16):
                     curr = time.time()
                     # Then pull forward
-                    road_state = self.pull_forward(travel_time=0.45)
-                    return False, curr - t0, road_state
+                    road_state, intersection_id = self.pull_forward(travel_time=0.425)
+                    return False, curr - t0, road_state, intersection_id
 
                 # Estimate which side of the road the robot is on
                 side = side_estimator.update(reading, 0.05)
 
                 # Check for end of street
                 if eos_estimator.update(reading, side, 0.12):
-                    road_state = self.pull_forward(travel_time=0.6)
+                    # intersection id could be wrong here 
+                    road_state, _ = self.pull_forward(travel_time=0.6)
                     curr = time.time()
                     print("End of street detected!")
                     self.turn_to_next_street("left")
-                    _, _, road_state = self.line_follow()
+                    _, _, road_state, intersection_id = self.line_follow()
                     self.drive_system.stop()
-                    return True, curr - t0, road_state
+                    return True, curr - t0, road_state, intersection_id
 
                 # Normal line following behavior
                 if reading == (0, 1, 0):
@@ -265,14 +279,19 @@ class Behaviors:
                 elif reading == (1, 1, 1):
                     self.drive_system.drive(STRAIGHT)
                 elif reading == (0, 1, 1):
-                    self.drive_system.drive(TURN_R)
+                    # self.drive_system.drive(TURN_R)
+                    self.drive_system.drive(STEER_R)
                 elif reading == (0, 0, 1):
-                    self.drive_system.drive(HOOK_R)
+                    # self.drive_system.drive(HOOK_R)
+                    self.drive_system.drive(TURN_R)
                 elif reading == (1, 1, 0):
-                    self.drive_system.drive(TURN_L)
+                    # self.drive_system.drive(TURN_L)
+                    self.drive_system.drive(STEER_L)
                 elif reading == (1, 0, 0):
-                    self.drive_system.drive(HOOK_L)
+                    # self.drive_system.drive(HOOK_L)
+                    self.drive_system.drive(TURN_L)
                 elif reading == (0, 0, 0):
+                    # print('HELP!!!!!')
                     # When all sensors read 0, use the road side estimator to decide what to do
                     if side == SideEstimator.LEFT:
                         # If pushed to the left, turn or hook right to get back to center
@@ -286,5 +305,5 @@ class Behaviors:
                 elif reading == (1, 0, 1):
                     self.drive_system.drive(STRAIGHT)
                 else:
-                    # considering the other 3 cases i.e. 101, 111, and 000
+                    # considering the other 3 cases i.e. 111, and 000
                     self.drive_system.stop()

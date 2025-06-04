@@ -16,6 +16,7 @@ from ui_main import SharedData
 import threading
 from ros import runros
 from directed_explore import directed_explore
+from nfc import NFCSensor
 
 class Robot:
     """
@@ -76,7 +77,7 @@ def initialization_helper(behaviors, robot, heading, x, y):
         tuple: A dict mapping (x, y) to an Intersection, and the updated heading.
     """
     original_heading = heading
-    isUturn, travel_time, road_ahead = behaviors.line_follow()
+    isUturn, travel_time, road_ahead, nfc_id = behaviors.line_follow()
     current_streets = [STATUS.UNKNOWN] * 8
     if isUturn:
         # checking if we hit a u-turn meaning we have a deadend in that heading
@@ -103,7 +104,7 @@ def initialization_helper(behaviors, robot, heading, x, y):
         current_streets[(heading + 1) % 8] = STATUS.NONEXISTENT
         current_streets[(heading - 1) % 8] = STATUS.NONEXISTENT
     initial_intersection = Intersection(x, y, current_streets)
-    return {(x, y): initial_intersection}, heading
+    return {(x, y): initial_intersection}, heading, nfc_id
 
 
 def initialize_map(behaviors, robot, heading, x, y, ask=False, no_ask_filename=""):
@@ -121,13 +122,13 @@ def initialize_map(behaviors, robot, heading, x, y, ask=False, no_ask_filename="
         x = int(input("Enter starting x-coordinate: "))
         y = int(input("Enter starting y-coordinate: "))
         heading = int(input("Enter starting heading (0–7): "))
-        intersection_dictionary, heading = initialization_helper(
+        intersection_dictionary, heading, nfc_id = initialization_helper(
             behaviors, robot, heading, x, y
         )
         pose = Pose(x, y, heading)
-        return map_obj, pose
+        return map_obj, pose, nfc_id
     else:
-        intersection_dictionary, heading = initialization_helper(
+        intersection_dictionary, heading, nfc_id = initialization_helper(
             behaviors, robot, heading, x, y
         )
         pose = Pose(x, y, heading)
@@ -135,7 +136,7 @@ def initialize_map(behaviors, robot, heading, x, y, ask=False, no_ask_filename="
             map_obj = Map.load_map(no_ask_filename)
         else:
             map_obj = Map(pose, intersection_dictionary)
-        return map_obj, pose
+        return map_obj, pose, nfc_id
 
 
 def choose_best_angle(time_estimate, mag_estimate, angles, pose):
@@ -179,9 +180,9 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
         y (float): Initial y-coordinate (default: 0.0)
         heading (int): Initial heading direction (0-7, default: 0)
     """
-    map, pose = initialize_map(behaviors, robot, heading, x, y, ask=True)
+    map, pose, nfc_id = initialize_map(behaviors, robot, heading, x, y, ask=True)
     map.plot(pose)
-
+    print(f'Current NFC id: {nfc_id}')
     goal = None  # Track current goal coordinates
     num_streets_to_goal = [0, []] # Track turns needed to get to goal
 
@@ -250,7 +251,7 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                     continue
         elif command == 'load':
             print("Loading map...")
-            map, pose = initialize_map(behaviors, robot, heading, 0.0, 0.0, False, map_name)
+            map, pose, nfc_id = initialize_map(behaviors, robot, heading, 0.0, 0.0, False, map_name)
             map.plot(pose)
             if shared.acquire():
                 try:
@@ -496,8 +497,6 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
             # perform left turn
             print("Turning left...")
             # Taking the possible turn angles
-            # possible_turns = map.get_unexplored_streets(pose.x, pose.y)
-            # possible_headings = [possible_turns[i][0] for i in range(len(possible_turns))]
             possible_angles = map.get_possible_angles(pose, turn_direction="left")
             possible_headings = [(pose.heading + angle//45) % 8 for _, angle in possible_angles ]
             # Store current pose values before turning
@@ -510,11 +509,9 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
             chosen_angle, chosen_offset = choose_best_angle(time_turn_estimate, turnAngle, [angle for _, angle in possible_angles], pose)
             if not num_streets_to_goal[1]: # If turning without goal-following
                 pose.calcturn(chosen_angle, True)
-                # pose.calcturn(turnAngle, True)
             else: # If turning without goal-following
                 pose.heading = num_streets_to_goal[1].pop(0)
             intersection = map.getintersection(pose.x, pose.y)
-            # turned_angle = abs(turnAngle)
             turned_angle = abs(chosen_angle)
             dh = (pose.heading - pose0.heading) % 8
             da_lower = (dh - 1) * 45
@@ -544,12 +541,8 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
             # perform right turn
             print("Turning right...")
             # Taking the possible turn angles
-            # possible_turns = map.get_unexplored_streets(pose.x, pose.y)
-            # possible_headings = [possible_turns[i][0] for i in range(len(possible_turns))]
             possible_angles = map.get_possible_angles(pose, turn_direction="right")
             possible_headings = [(pose.heading + angle//45) % 8 for _, angle in possible_angles ]
-            # Reading initial magnetometer reading
-            # initial_mag = time.time(), behaviors.adc.readangle()
             # Store current pose values before turning
             pose0 = pose.clone()
             # returning the turn angle and turn time
@@ -564,7 +557,6 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
             else:
                 pose.heading = num_streets_to_goal[1].pop(0)
             intersection = map.getintersection(pose.x, pose.y)
-            # turned_angle = abs(turnAngle)
             turned_angle = abs(chosen_angle)
             dh = (pose0.heading - pose.heading) % 8
             da_lower = (dh + 1) * 45
@@ -600,7 +592,7 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                 check_distance = .35
             else:
                 # check_distance = .90
-                check_distance = .65
+                check_distance = .6
             blocked = behaviors.check_blockage(distance=check_distance)
             if blocked: 
                 print("Cannot go straight: Double check revealed blockage!")
@@ -635,7 +627,8 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
             print("Going Straight")
             # Store current pose values before moving
             pose0 = pose.clone()
-            isUturn, travel_time, road_ahead = behaviors.line_follow()
+            isUturn, travel_time, road_ahead, intersection_id = behaviors.line_follow()
+            print(f'Current NFC id: {intersection_id}')
             # Outcome B
             if not isUturn:
                 pose.calcmove()
@@ -647,6 +640,7 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
             if shared.acquire():
                 try:
                     shared.command = None
+                    shared.intersection_id = intersection_id
                 finally:
                     shared.release()
 
@@ -743,12 +737,17 @@ def main_simple_brain():
     sensors = LineSensor(io)
     adc = ADC(io)
     proximity_sensor = ProximitySensor(io)
-    behaviors = Behaviors(drive_system, sensors, adc, proximity_sensor)
+    # Initializing NFC Sensor
+    nfc_sensor = NFCSensor()
+    # nfc_sensor.read()
+    behaviors = Behaviors(drive_system, sensors, adc, proximity_sensor, nfc_sensor)
 
     shared = SharedData()
     # Start the ROS worker thread.
     rosthread = threading.Thread(name="ROSThread", target=runros, args=(shared,))
     rosthread.start()
+    
+   
     
     ui_thread = threading.Thread(target=runui, args=(shared,))
     ui_thread.daemon = True

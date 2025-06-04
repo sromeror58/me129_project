@@ -33,7 +33,8 @@ class DriveSystem:
 
     # Predefined motor power levels for different driving styles
     DRIVE_STYLES = {
-        "STRAIGHT": (0.655, 0.73),
+        # "STRAIGHT": (0.655, 0.73),
+        "STRAIGHT": (0.72, 0.73),
         "VEER_L": (0.73, 0.77),
         "STEER_L": (0.62, 0.77),
         "TURN_L": (0.47, 0.79),
@@ -114,7 +115,7 @@ if __name__ == "__main__":
 
         # Create drive system and test a drive style
         ds = DriveSystem(io)
-        ds.drive("HOOK_L")
+        ds.drive("STRAIGHT")
         time.sleep(4)
         ds.stop()
 

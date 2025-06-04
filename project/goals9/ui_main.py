@@ -7,7 +7,7 @@ class SharedData:
         self.lock = threading.Lock()
         
         # Mode flags
-        self.mode = 4  # 0=manual, 1=explore, 2=goal, 3=paused, 4=uninitialized. -1=quit
+        self.mode = 4  # 0=manual, 1=explore, 2=goal, 3=paused, 4=uninitialized, 5=fetch. -1=quit
         self.take_step = False  # True when in step-by-step mode
         # Robot state
         self.pose = None  # Current pose (x, y, heading)
@@ -21,6 +21,10 @@ class SharedData:
         self.robotx = 0 # Copy of the robot’s x
         self.roboty = 0 # Copy of the robot’s y
         self.robotheading = 0 # Copy of the robot’s heading
+        self.fetch = None # Prize to fetch 
+        self.dist_dict = {} # 
+        self.info_dict = {}
+        self.intersection_id = None
 
     def acquire(self):
         return self.lock.acquire()
