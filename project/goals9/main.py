@@ -77,7 +77,7 @@ def initialization_helper(behaviors, robot, heading, x, y):
         tuple: A dict mapping (x, y) to an Intersection, and the updated heading.
     """
     original_heading = heading
-    isUturn, travel_time, road_ahead, nfc_id = behaviors.line_follow()
+    isUturn, travel_time, road_ahead = behaviors.line_follow()
     current_streets = [STATUS.UNKNOWN] * 8
     if isUturn:
         # checking if we hit a u-turn meaning we have a deadend in that heading
@@ -103,8 +103,8 @@ def initialization_helper(behaviors, robot, heading, x, y):
     if road_ahead:
         current_streets[(heading + 1) % 8] = STATUS.NONEXISTENT
         current_streets[(heading - 1) % 8] = STATUS.NONEXISTENT
-    initial_intersection = Intersection(x, y, current_streets)
-    return {(x, y): initial_intersection}, heading, nfc_id
+    initial_intersection = Intersection(x, y, current_streets, nfc_id=behaviors.nfc_sensor.last_read)
+    return {(x, y): initial_intersection}, heading
 
 
 def initialize_map(behaviors, robot, heading, x, y, ask=False, no_ask_filename=""):
@@ -126,9 +126,9 @@ def initialize_map(behaviors, robot, heading, x, y, ask=False, no_ask_filename="
             behaviors, robot, heading, x, y
         )
         pose = Pose(x, y, heading)
-        return map_obj, pose, nfc_id
+        return map_obj, pose
     else:
-        intersection_dictionary, heading, nfc_id = initialization_helper(
+        intersection_dictionary, heading = initialization_helper(
             behaviors, robot, heading, x, y
         )
         pose = Pose(x, y, heading)
@@ -136,7 +136,7 @@ def initialize_map(behaviors, robot, heading, x, y, ask=False, no_ask_filename="
             map_obj = Map.load_map(no_ask_filename)
         else:
             map_obj = Map(pose, intersection_dictionary)
-        return map_obj, pose, nfc_id
+        return map_obj, pose
 
 
 def choose_best_angle(time_estimate, mag_estimate, angles, pose):
@@ -180,9 +180,9 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
         y (float): Initial y-coordinate (default: 0.0)
         heading (int): Initial heading direction (0-7, default: 0)
     """
-    map, pose, nfc_id = initialize_map(behaviors, robot, heading, x, y, ask=True)
+    map, pose = initialize_map(behaviors, robot, heading, x, y, ask=True)
     map.plot(pose)
-    print(f'Current NFC id: {nfc_id}')
+    print(f'Current NFC id: {map.getintersection(x, y).nfc_id}')
     goal = None  # Track current goal coordinates
     num_streets_to_goal = [0, []] # Track turns needed to get to goal
 
@@ -251,7 +251,7 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                     continue
         elif command == 'load':
             print("Loading map...")
-            map, pose, nfc_id = initialize_map(behaviors, robot, heading, 0.0, 0.0, False, map_name)
+            map, pose= initialize_map(behaviors, robot, heading, 0.0, 0.0, False, map_name)
             map.plot(pose)
             if shared.acquire():
                 try:
@@ -360,25 +360,28 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                                 print("Going straight along optimal path")
                                 command = 'straight'
                         else:
-                            if taking_step:
-                                print("No valid path to goal. No step taken: clearing goal and staying in paused.")
-                                if shared.acquire():
-                                    try:
-                                        shared.goal = None
-                                        shared.mode = 0
-                                    finally:
-                                        shared.release()
-                            else:
-                                print("No valid path to goal. Returning to manual mode.")
-                                if shared.acquire():
-                                    try:
-                                        shared.goal = None
-                                        shared.mode = 0
-                                    finally:
-                                        shared.release()
-                            map.setstreet(None, None)  # Clear optimal path tree
+                            # there is no path to get to intersection, so we explore any unexplored streets to get to goal
+                            is_directed_exploration = True
+                            print("No valid known path to goal. Switching to directed explore to get to goal.")
+                            # if taking_step:
+                            #     print("No valid path to goal. No step taken: clearing goal and staying in paused.")
+                            #     if shared.acquire():
+                            #         try:
+                            #             shared.goal = None
+                            #             shared.mode = 0
+                            #         finally:
+                            #             shared.release()
+                            # else:
+                            #     print("No valid path to goal. Returning to manual mode.")
+                            #     if shared.acquire():
+                            #         try:
+                            #             shared.goal = None
+                            #             shared.mode = 0
+                            #         finally:
+                            #             shared.release()
+                            # map.setstreet(None, None)  # Clear optimal path tree
                             map.plot(pose)
-                            continue
+                            # continue
                     else:
                         # Directed exploration: Goal doesn't exist in map yet
                         # Use exploration logic but biased toward the goal
@@ -627,8 +630,7 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
             print("Going Straight")
             # Store current pose values before moving
             pose0 = pose.clone()
-            isUturn, travel_time, road_ahead, intersection_id = behaviors.line_follow()
-            print(f'Current NFC id: {intersection_id}')
+            isUturn, travel_time, road_ahead = behaviors.line_follow()
             # Outcome B
             if not isUturn:
                 pose.calcmove()
@@ -640,10 +642,19 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
             if shared.acquire():
                 try:
                     shared.command = None
-                    shared.intersection_id = intersection_id
+                    # shared.intersection_id = behaviors.nfc_sensor.last_read
+                    new_intersection = map.getintersection(pose.x, pose.y)
+                    new_intersection.set_nfc_id(behaviors.nfc_sensor.last_read)
+                    new_intersection.set_distance_dict(shared.dist_dict[new_intersection.nfc_id])
+                    print(f'Current NFC id: {new_intersection.nfc_id}')
+                    print(f'Current intersection dictionary: {new_intersection.distance_dict}')
+                    
                 finally:
                     shared.release()
-
+            # setting nfc id to current intersection
+            new_intersection = map.getintersection(pose.x, pose.y)
+            new_intersection.set_nfc_id(behaviors.nfc_sensor.last_read)
+            
             if (pose.x, pose.y) == goal:
                 # If was in goal mode, go to manual
                 # If was in autonomous mode, clear goal

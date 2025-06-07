@@ -159,22 +159,16 @@ class Behaviors:
             travel_time (float): Amount of time in seconds to pull forward.
                                Defaults to 0.5 seconds.
         Returns:
-            tuple:
-                - bool: True if road still exists ahead, False otherwise
-                - NFC ID: The detected intersection ID from the NFC sensor, or None if not available
+            bool: True if road still exists ahead, False otherwise
+                
         """
         # self.drive_system.stop()
         # time.sleep(0.2)
         street_detector = StreetDetector(time_constant=0.40)
         t_0 = time.time()
         curr = time.time()
-        # reading the intersection ID
-        nfc_id = None
         
         while curr - t_0 <= travel_time:
-            intersection_id = self.nfc_sensor.read()
-            if intersection_id:
-                nfc_id = intersection_id
             self.drive_system.drive(STRAIGHT)
             curr = time.time()
             # This means that there is still road that the sensor is picking up
@@ -183,7 +177,7 @@ class Behaviors:
         self.drive_system.stop()
         readings = 1.0 if sum(self.sensors.read()) >= 1.0 else 0.0
         print(f'road state: {street_detector.update(readings)}')
-        return street_detector.update(readings), nfc_id
+        return street_detector.update(readings)
 
     def check_blockage(self, distance: float = 0.4):
         """
@@ -220,7 +214,6 @@ class Behaviors:
                 - isUturn (bool): True if a U-turn was performed, False otherwise
                 - travel_time (float): Time spent following the line in seconds
                 - road_ahead (bool): whether there is a road ahead after pulling forward
-                - intersection_id (NFC ID): The detected intersection ID from the NFC sensor, or None if not available
         """
         intersection_estimator = IntersectionEstimator()
         side_estimator = SideEstimator()
@@ -256,8 +249,8 @@ class Behaviors:
                 if intersection_estimator.update(reading, 0.20):
                     curr = time.time()
                     # Then pull forward
-                    road_state, intersection_id = self.pull_forward(travel_time=0.45)
-                    return False, curr - t0, road_state, intersection_id
+                    road_state = self.pull_forward(travel_time=0.45)
+                    return False, curr - t0, road_state
 
                 # Estimate which side of the road the robot is on
                 side = side_estimator.update(reading, 0.05)
@@ -265,13 +258,13 @@ class Behaviors:
                 # Check for end of street
                 if eos_estimator.update(reading, side, 0.12):
                     # intersection id could be wrong here 
-                    road_state, _ = self.pull_forward(travel_time=0.6)
+                    road_state = self.pull_forward(travel_time=0.6)
                     curr = time.time()
                     print("End of street detected!")
                     self.turn_to_next_street("left")
-                    _, _, road_state, intersection_id = self.line_follow()
+                    _, _, road_state = self.line_follow()
                     self.drive_system.stop()
-                    return True, curr - t0, road_state, intersection_id
+                    return True, curr - t0, road_state
 
                 # Normal line following behavior
                 if reading == (0, 1, 0):

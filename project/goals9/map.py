@@ -77,7 +77,7 @@ class Intersection:
     the status of each street.
     """
 
-    def __init__(self, x, y, streets=None):
+    def __init__(self, x, y, streets=None, nfc_id=None):
         """
         Initialize an intersection with coordinates and street statuses.
 
@@ -91,6 +91,8 @@ class Intersection:
         self.direction = None
         self.dijkstra_state = DIJKSTRA_STATE.UNVISITED
         self.blocked = [False] * 8 # keep track of heading where there is blocking (true=blocked, false=otherwise)
+        self.nfc_id = nfc_id
+        self.distance_dict = None
         if streets is not None:
             self.streets = streets
         else:
@@ -121,6 +123,11 @@ class Intersection:
     def setcost(self, cost):
         self.cost = cost
 
+    def set_nfc_id(self, nfc_id):
+        self.nfc_id = nfc_id
+    
+    def set_distance_dict(self, distance_dict):
+        self.distance_dict = distance_dict
 
 class Map:
     """

@@ -24,7 +24,6 @@ class SharedData:
         self.fetch = None # Prize to fetch 
         self.dist_dict = {} # 
         self.info_dict = {}
-        self.intersection_id = None
 
     def acquire(self):
         return self.lock.acquire()
