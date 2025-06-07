@@ -70,7 +70,7 @@ def directed_explore(map, pose, goal, command, shared):
         for intersection in map.intersections.values():
             min_h, min_dist = 0, float("inf")
             for h in range(8):
-                if intersection.streets[h] in [STATUS.UNEXPLORED] and not intersection.blocked[h]:
+                if intersection.streets[h] in [STATUS.UNEXPLORED, STATUS.CONNECTED] and not intersection.blocked[h]:
                     dx, dy = DX_DY_TABLE[h]
                     next_x, next_y = intersection.x + dx, intersection.y + dy
                     euc_distance = euclidean_distance(next_x, next_y, x_g, y_g) + distance(dx, dy) # since we are travelling 1 block

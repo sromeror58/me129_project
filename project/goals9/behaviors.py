@@ -165,7 +165,7 @@ class Behaviors:
         """
         # self.drive_system.stop()
         # time.sleep(0.2)
-        street_detector = StreetDetector()
+        street_detector = StreetDetector(time_constant=0.40)
         t_0 = time.time()
         curr = time.time()
         # reading the intersection ID
@@ -253,10 +253,10 @@ class Behaviors:
             # Only update detectors and drive if not stopped
             if not is_stopped:
                 # Check for intersection
-                if intersection_estimator.update(reading, 0.16):
+                if intersection_estimator.update(reading, 0.20):
                     curr = time.time()
                     # Then pull forward
-                    road_state, intersection_id = self.pull_forward(travel_time=0.425)
+                    road_state, intersection_id = self.pull_forward(travel_time=0.45)
                     return False, curr - t0, road_state, intersection_id
 
                 # Estimate which side of the road the robot is on

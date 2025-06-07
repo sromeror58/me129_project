@@ -592,7 +592,7 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                 check_distance = .35
             else:
                 # check_distance = .90
-                check_distance = .6
+                check_distance = .65
             blocked = behaviors.check_blockage(distance=check_distance)
             if blocked: 
                 print("Cannot go straight: Double check revealed blockage!")
