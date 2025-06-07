@@ -112,6 +112,21 @@ def directed_explore(map, pose, goal, command, shared):
     return False, None
 
 def fetch(map, pose, command, shared, prize, take_step):
+    """
+    Determines the next move in a directed exploration to fetch a prize.
+
+    Parameters:
+        map (Map): The robot's map of the environment.
+        pose (Pose): The robot's current position and heading.
+        command (str or None): Previous movement command.
+        shared (SharedData): Shared state object.
+        prize (str): The prize to fetch.
+        take_step (function): Function to take a step in the environment.
+
+    Returns:
+        tuple: (bool indicating whether to continue exploring, 
+                str or None for the next command).
+    """
     current_intersection = map.getintersection(pose.x, pose.y)
     # checking if prize exist or if prize is in the dictionary
     if shared.acquire():
@@ -123,17 +138,17 @@ def fetch(map, pose, command, shared, prize, take_step):
                 shared.fetch = None
         finally:
             shared.release()
-        return
+        return False, None
     distance_dict = current_intersection.distance_dict
     if prize not in distance_dict:
         if shared.acquire():
-        try:
-            print(f'Prize to fetch does not exist, going back to manual mode')
-            shared.mode = 0
-            shared.fetch = None
-        finally:
-            shared.release()
-        return
+            try:
+                print(f'Prize to fetch does not exist, going back to manual mode')
+                shared.mode = 0
+                shared.fetch = None
+            finally:
+                shared.release()
+            return False, None
 
     num_intersections = {}
     for intersection in map.intersections:
@@ -162,7 +177,8 @@ def fetch(map, pose, command, shared, prize, take_step):
                         dx, dy = DX_DY_TABLE[h]
                         next_x, next_y = current_intersection.x + dx, current_intersection.y + dy
                         potential_candidates.append((next_x, next_y))
-                return continue_exploring, command = directed_explore(map, pose, potential_candidates[0], command, shared)
+                continue_exploring, command = directed_explore(map, pose, potential_candidates[0], command, shared)
+                return continue_exploring, command
         # otherwise, we explored a intersection that had a distance that increased, so we go back to original intersection.
         else:
             goal = next(iter(num_intersections))
@@ -170,86 +186,47 @@ def fetch(map, pose, command, shared, prize, take_step):
             return continue_exploring, command
     # case 3: We have not explored an intersection that has a distance of 0.5
     else:
-        
-
-
-# def fetch(map, pose, command, shared, prev, curr):
-#     prize = None
-#     nfc_id = None
-#     prize_dict = None
-#     info_dict = None
-#     # get the prize where if it is None, return and quit fetching
-#     if shared.acquire():
-#         try:
-#             prize = shared.fetch
-#             nfc_id = shared.intersection_id
-#             prize_dict = shared.prize_dict
-#             info_dict = shared.info_dict
-#             if prize is None:
-#                 print(f'Prize to fetch is None, going back to manual mode')
-#                 shared.mode = 0
-#                 shared.fetch = None
-#         finally:
-#             shared.release()
-#     # updating whether our previous intersection and current
-#     if nfc_id != curr:
-#         prev = curr
-#         curr = nfc_id
-    
-#     # check the valid cases of prev and curr (i.e. when we have no prev and when we have a prev intersection)
-#     if prev is None:
-#         # first, we want to turn around at our current intersection, to get 
-#         # the most information as possible (i.e. get all possible headings)
-#         x_i, y_i = pose.x, pose.y  
-#         curr_intersection = map.getintersection(x_i, y_i)
-#         if any(status == STATUS.UNKNOWN for status in curr_intersection.streets):
-#             command = 'left'
-#             return prize, command, prev, curr
-#         # else we go straight or turn to the next intersection
-#         else:
-#             candidates = map.get_potential_streets(pose.x, pose.y)
-#             closest_heading = min(candidates, key=lambda x: min((x[0] - pose.heading) % 8, (pose.heading - x[0]) % 8))[0] if candidates else None
-#             if closest_heading is not None:
-#                 if closest_heading != pose.heading:
-#                     heading_diff = (closest_heading - pose.heading) % 8
-#                     if heading_diff <= 4:
-#                         command = 'left'  # Turn left
-#                     else:
-#                         command = 'right'  # Turn right
-#                 else:
-#                     command = 'straight' # going straight along optimal path
-#             # this else case should never happen!!!
-#             else:
-#                 print('There is no more streets to explore to fetch, going back to manual mode!')
-#                 if shared.acquire():
-#                     shared.mode = 0
-#                     shared.fetch = None
-#                     shared.release()
-#             return prize, command, prev, curr
-#     # checking when prev is not None
-#     else:
-#         # first we want to compare the cost of the previous nfc id to the current nfc id
-#         prev_distance = dist_dict[prev][prize]['distance']
-#         curr_distance = dist_dict[curr][prize]['distance']
-#         # case when fetch is complete
-#         if curr_distance == 0.5 and prev_distance == 0.5:
-#             print(f'NFC ids surrounding prize are: ({prev, curr})')
-#             if shared.acquire():
-#                     shared.mode = 0
-#                     shared.fetch = None
-#                     shared.release()
-#             return prize, None, prev, curr   
-#         # case when our previous intersection was closer to the prize
-#         elif prev_distance < curr_distance:
-#             # set previous to None and build off of the current intersection
-#             prev = None
-            
-#             pass
-#         # case when our current intersection is better if not the same
-#         else:
-#             pass
+        # first check if we can go to the intersection that is closest to the prize that is not the current intersection
+        lowest_intersection = current_intersection
+        for intersection in map.intersections:
+            if intersection.distance_dict[prize] < lowest_intersection.distance_dict[prize]:
+                lowest_intersection = intersection
+        # we found an intersection that is closest to the prize that is not the current intersection
+        if (pose.x, pose.y) != (lowest_intersection.x, lowest_intersection.y):
+            goal = (lowest_intersection.x, lowest_intersection.y)
+            continue_exploring, command = go_to_goal(take_step, goal, shared, map, pose)
+            return continue_exploring, command
+        # we are at an intersection with the lowest distance to the prize, so we explore
+        else:
+            # get all unexplored streets if they have not been discovered
+            if any(status == STATUS.UNKNOWN for status in lowest_intersection.streets):
+                command = 'left'
+                return True, command
+            # otherwise, consider all unexplored streets and explore to new intersection
+            else:
+                potential_candidates = []
+                for h in range(8):
+                    if lowest_intersection.streets[h] in [STATUS.UNEXPLORED] and not lowest_intersection.blocked[h]:
+                        dx, dy = DX_DY_TABLE[h]
+                        next_x, next_y = lowest_intersection.x + dx, lowest_intersection.y + dy
+                        potential_candidates.append((next_x, next_y))
+                continue_exploring, command = directed_explore(map, pose, potential_candidates[0], command, shared)
+                return continue_exploring, command
 
 def go_to_goal(take_step, goal, shared, map, pose):
+    """
+    Takes a step towards a goal.
+
+    Parameters:
+        take_step (bool): Should the robot take a step?
+        goal (tuple): The coordinates of the goal.
+        shared (SharedData): Shared state object.
+        map (Map): The robot's map of the environment.
+        pose (Pose): The robot's current position and heading.
+
+    Returns:
+        tuple: A tuple indicating whether to continue exploring and the next command.
+    """
     taking_step = take_step
     # If we have a goal, check if we've reached it
     if goal is not None:
@@ -273,7 +250,7 @@ def go_to_goal(take_step, goal, shared, map, pose):
                         print("Goal reached! Returning to manual mode from goal mode")
                     elif shared.mode == 1:
                         print("Goal reached! Continuing autonomous mode")
-                    elif shared.mode == 3 and before_pause == 2:
+                    elif shared.mode == 3:
                         print("Goal reached after the final step! Returning to manual mode from goal mode")
                         shared.mode = 0
                     shared.goal = None
