@@ -401,12 +401,12 @@ class Map:
         plt.clf()
         # Create a new axes, enable the grid, and set axis limits.
         plt.axes()
-        plt.gca().set_xlim(-3.5, 3.5)
-        plt.gca().set_ylim(-3.5, 3.5)
+        plt.gca().set_xlim(-5.5, 5.5)
+        plt.gca().set_ylim(-5.5, 5.5)
         plt.gca().set_aspect("equal")
         # Show all the possible locations.
-        for x_grid in range(-3, 4):
-            for y_grid in range(-3, 4):
+        for x_grid in range(-4, 5):
+            for y_grid in range(-4, 5):
                 plt.plot(x_grid, y_grid, color="lightgray", marker="o", markersize=8)
         # Get the direction vector for the current heading
         dx, dy = DX_DY_TABLE[pose.heading]

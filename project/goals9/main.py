@@ -15,7 +15,7 @@ from proximitysensor import ProximitySensor
 from ui_main import SharedData
 import threading
 from ros import runros
-from directed_explore import directed_explore
+from directed_explore import directed_explore, fetch
 from nfc import NFCSensor
 
 class Robot:
@@ -122,7 +122,7 @@ def initialize_map(behaviors, robot, heading, x, y, ask=False, no_ask_filename="
         x = int(input("Enter starting x-coordinate: "))
         y = int(input("Enter starting y-coordinate: "))
         heading = int(input("Enter starting heading (0–7): "))
-        intersection_dictionary, heading, nfc_id = initialization_helper(
+        intersection_dictionary, heading = initialization_helper(
             behaviors, robot, heading, x, y
         )
         pose = Pose(x, y, heading)
@@ -183,6 +183,15 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
     map, pose = initialize_map(behaviors, robot, heading, x, y, ask=True)
     map.plot(pose)
     print(f'Current NFC id: {map.getintersection(x, y).nfc_id}')
+    if shared.acquire():
+        new_intersection = map.getintersection(pose.x, pose.y)
+        new_intersection.set_nfc_id(behaviors.nfc_sensor.last_read)
+        print(f'Is this the same: {behaviors.nfc_sensor.last_read}')
+        print(f'full distance dictionary: {shared.dist_dict}')
+        new_intersection.set_distance_dict(shared.dist_dict[behaviors.nfc_sensor.last_read])
+        print(f'Current NFC id: {new_intersection.nfc_id}')
+        print(f'Current intersection dictionary: {new_intersection.distance_dict}')
+        shared.release()
     goal = None  # Track current goal coordinates
     num_streets_to_goal = [0, []] # Track turns needed to get to goal
 
@@ -363,23 +372,6 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                             # there is no path to get to intersection, so we explore any unexplored streets to get to goal
                             is_directed_exploration = True
                             print("No valid known path to goal. Switching to directed explore to get to goal.")
-                            # if taking_step:
-                            #     print("No valid path to goal. No step taken: clearing goal and staying in paused.")
-                            #     if shared.acquire():
-                            #         try:
-                            #             shared.goal = None
-                            #             shared.mode = 0
-                            #         finally:
-                            #             shared.release()
-                            # else:
-                            #     print("No valid path to goal. Returning to manual mode.")
-                            #     if shared.acquire():
-                            #         try:
-                            #             shared.goal = None
-                            #             shared.mode = 0
-                            #         finally:
-                            #             shared.release()
-                            # map.setstreet(None, None)  # Clear optimal path tree
                             map.plot(pose)
                             # continue
                     else:
@@ -389,7 +381,8 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                         if is_directed_exploration:
                             command = optimal_command
                 else:
-                    if mode == 1 or take_step:
+                    # if mode == 1 or take_step:
+                    if mode == 1:
 
                         if take_step:
                             if shared.acquire():
@@ -484,6 +477,30 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                                 if shared.goal and shared.mode != 0:
                                     print(f"Setting goal to unexplored intersection at {goal}")
                                 # continue  # Let the goal-directed navigation handle the movement
+                    # fetching which is not goal following nor autonomous exploration
+                    elif mode == 5 or before_pause == 5:
+                        if take_step:
+                            if shared.acquire():
+                                try:
+                                    shared.take_step = False
+                                finally:
+                                    shared.release()
+                        continue_fetching, optimal_command, fetch_intersections = fetch(map, pose, shared, take_step)
+                        # print(f'did i make it here?')
+                        # print(continue_fetching, optimal_command, fetch_intersections)
+                        if continue_fetching and optimal_command is not None:
+                            # print(f'Am i even here?????')
+                            command = optimal_command
+                        elif not continue_fetching and fetch_intersections is not None:
+                            if shared.acquire():
+                                shared.fetch = None
+                                shared.mode = 0
+                                print(f'Reached intersection at fetched prize! Intersections are: {fetch_intersections}')
+                                shared.release()
+                            command = optimal_command
+                            
+                            
+                        
 
             except KeyboardInterrupt:
                 robot.stop()

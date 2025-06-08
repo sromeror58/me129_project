@@ -246,7 +246,7 @@ class Behaviors:
             # Only update detectors and drive if not stopped
             if not is_stopped:
                 # Check for intersection
-                if intersection_estimator.update(reading, 0.20):
+                if intersection_estimator.update(reading, 0.2):
                     curr = time.time()
                     # Then pull forward
                     road_state = self.pull_forward(travel_time=0.45)
@@ -257,7 +257,6 @@ class Behaviors:
 
                 # Check for end of street
                 if eos_estimator.update(reading, side, 0.12):
-                    # intersection id could be wrong here 
                     road_state = self.pull_forward(travel_time=0.6)
                     curr = time.time()
                     print("End of street detected!")

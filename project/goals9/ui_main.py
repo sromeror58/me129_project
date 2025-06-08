@@ -45,6 +45,7 @@ def runui(shared):
     print("Available commands:\n")
     print("  'explore'   - Start autonomous exploration")
     print("  'goal'      - Drive to specified coordinates")
+    print("  'fetch'      - Fetch a prize")
     print("  'pause'     - Pause autonomous movement")
     print("  'step'      - Take one action (when paused)")
     print("  'resume'    - Resume autonomous movement")
@@ -85,9 +86,18 @@ def runui(shared):
                             print(f"Setting goal to ({x}, {y})")
                         except ValueError:
                             print("Invalid coordinates. Please enter integers.")
+                    
+                    elif command == 'fetch':
+                        try:
+                            prize = int(input("Enter prize number: "))
+                            shared.mode = 5  # Fetch mode
+                            shared.fetch = prize
+                            print(f"Fetching prize: {prize}")
+                        except ValueError:
+                            print("Invalid prize. Please enter an integer.")
 
                     elif command == 'pause':
-                        if shared.mode in [1, 2]:  # Only pause if in explore or goal mode
+                        if shared.mode in [1, 2, 5]:  # Only pause if in explore or goal mode
                             shared.before_pause = shared.mode
                             shared.mode = 3  # Paused mode
                             print("Pausing autonomous movement")
@@ -103,7 +113,13 @@ def runui(shared):
 
                     elif command == 'resume':
                         if shared.mode == 3:  # Only resume if paused
-                            shared.mode = 1 if shared.goal is None else 2
+                            if shared.before_pause == 1:
+                                shared.mode = 1
+                            elif shared.before_pause == 2:
+                                shared.mode = 2
+                            elif shared.before_pause == 5:
+                                shared.mode = 5
+                            # shared.mode = 1 if shared.goal is None else 2
                             print("Resuming autonomous movement")
                         else:
                             print("Not in paused mode")
