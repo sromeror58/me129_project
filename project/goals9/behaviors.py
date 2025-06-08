@@ -5,6 +5,7 @@ from sensor_estimation import (
     EndOfStreetEstimator,
     NextStreetDetector,
     StreetDetector,
+    PrizeMarkerDetector
 )
 from pose import getTurnAngle
 from config import (
@@ -16,7 +17,8 @@ from config import (
     SPIN_L,
     SPIN_R,
     STEER_R,
-    STEER_L
+    STEER_L,
+    PICKUP_TIME
 )
 
 
@@ -29,7 +31,7 @@ class Behaviors:
     the drive system, sensors, and magnetometer to implement these behaviors.
     """
 
-    def __init__(self, drive_system, sensors, adc, proximity_sensor, nfc_sensor):
+    def __init__(self, drive_system, sensors, adc, proximity_sensor, nfc_sensor, magnet):
         """
         Initialize the Behaviors class with the necessary components.
 
@@ -45,6 +47,7 @@ class Behaviors:
         self.adc = adc
         self.proximity_sensor = proximity_sensor
         self.nfc_sensor = nfc_sensor
+        self.magnet = magnet
 
     def turn_to_next_street(self, direction):
         """
@@ -112,19 +115,6 @@ class Behaviors:
         self.drive_system.stop()
 
         turnAngle1 = getTurnAngle(angle1, self.adc.readangle(), isLeft)
-        # print(f'Turn angle from getTurnAngle: {turnAngle1}')
-        # if adjustedangle1:
-        #     turnAngle2 = getTurnAngle(adjustedangle1, self.adc.readangle(), isLeft)
-        #     print(turnAngle2)
-
-        #     # If less than full turn, since full turn's are pretty obvious
-        #     if abs(turnAngle2 - turnAngle1) <= 90:
-        #         # Want to weight closer to turnAngle2 the larger the turn is: 0/5 to 4/5
-        #         x = abs(turnAngle1) / 360
-        #         weight = (3 * x**2 - 2 * x**3) / 1.15
-        #         turnAngle1 = (1 - weight) * turnAngle1 + (weight) * turnAngle2
-
-        # print(turnAngle1)
         return turnAngle1, curr - t0
 
     def realign(self):
@@ -147,7 +137,7 @@ class Behaviors:
                 self.drive_system.drive(SPIN_L)
         
 
-    def pull_forward(self, travel_time=0.55):
+    def pull_forward(self, travel_time=0.55, backwards=False):
         """
         Performs the pull forward behavior after detecting a valid intersection.
 
@@ -169,7 +159,7 @@ class Behaviors:
         curr = time.time()
         
         while curr - t_0 <= travel_time:
-            self.drive_system.drive(STRAIGHT)
+            self.drive_system.drive(STRAIGHT, backwards)
             curr = time.time()
             # This means that there is still road that the sensor is picking up
             readings = 1.0 if sum(self.sensors.read()) >= 1.0 else 0.0
@@ -198,7 +188,7 @@ class Behaviors:
         # print(f"Street ahead is clear. Distance: {middle_distance}m")
         return False
 
-    def line_follow(self):
+    def line_follow(self, prize_turn_direction=None):
         """
         Performs the line following behavior.
 
@@ -218,6 +208,7 @@ class Behaviors:
         intersection_estimator = IntersectionEstimator()
         side_estimator = SideEstimator()
         eos_estimator = EndOfStreetEstimator()
+        prize_estimator = PrizeMarkerDetector()
 
         # Obstacle detection thresholds (in meters)
         STOP_THRESHOLD = 0.15  # Stop when obstacle is within 15cm
@@ -264,6 +255,13 @@ class Behaviors:
                     _, _, road_state = self.line_follow()
                     self.drive_system.stop()
                     return True, curr - t0, road_state
+                
+                # Check for prize marker
+                if prize_estimator.update(reading, 0.2):
+                    if prize_turn_direction is not None:
+                        self.pickup(prize_turn_direction, PICKUP_TIME)
+                    else:
+                        continue
 
                 # Normal line following behavior
                 if reading == (0, 1, 0):
@@ -299,3 +297,29 @@ class Behaviors:
                 else:
                     # considering the other 3 cases i.e. 111, and 000
                     self.drive_system.stop()
+    
+    def magneton(self):
+        self.magnet.on()
+    
+    def magnetoff(self):
+        self.magnet.off()
+    
+    def pickup(self, turn_direction, move_time):
+        # 1 pull forward, just like an intersection
+        self.pull_forward(travel_time=0.45)
+        time.sleep(0.2)
+        # 2 turn toward 
+        opposite_direction = 'left' if turn_direction == 'right' else 'right'
+        self.turn_to_next_street(turn_direction)
+        time.sleep(0.2)
+        self.realign()
+        # 3 pull back
+        self.pull_forward(travel_time=move_time, backwards=True)
+        # 4 turn on the magnet
+        self.magneton()
+        time.sleep(0.2)
+        # 5 pull forward the same amount
+        self.pull_forward(travel_time=move_time)
+        # 6 undo the turn
+        self.turn_to_next_street(opposite_direction)
+        

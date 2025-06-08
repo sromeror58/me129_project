@@ -65,3 +65,9 @@ PWM_CONST = 1.5
 
 # euclidean distance constant
 EUC_CONST = 1.7
+
+# Magnet object constants
+PIN_MAGNET = 1
+
+# Prize Pickup constants
+PICKUP_TIME = 1.2

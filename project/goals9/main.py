@@ -17,6 +17,7 @@ import threading
 from ros import runros
 from directed_explore import directed_explore, fetch
 from nfc import NFCSensor
+from magnet import ElectroMagnet
 
 class Robot:
     """
@@ -187,7 +188,7 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
         new_intersection = map.getintersection(pose.x, pose.y)
         new_intersection.set_nfc_id(behaviors.nfc_sensor.last_read)
         print(f'Is this the same: {behaviors.nfc_sensor.last_read}')
-        print(f'full distance dictionary: {shared.dist_dict}')
+        # print(f'full distance dictionary: {shared.dist_dict}')
         new_intersection.set_distance_dict(shared.dist_dict[behaviors.nfc_sensor.last_read])
         print(f'Current NFC id: {new_intersection.nfc_id}')
         print(f'Current intersection dictionary: {new_intersection.distance_dict}')
@@ -645,9 +646,32 @@ def simple_brain(behaviors, robot, shared, x=0.0, y=0.0, heading=0):
                 continue
 
             print("Going Straight")
+            # first checking if current pose is 0.5 away from a prize and storing the direction to 
+            # perform prize pickup behavior
+            prize_turn_direction = None
+            if shared.acquire():
+                mode, prev_mode = shared.mode, shared.before_pause
+                if mode == 5 or prev_mode == 5:
+                    prize = shared.fetch
+                    intersection = map.getintersection(pose.x, pose.y)
+                    # get nfc id and prize distances from that id
+                    current_nfc_id = intersection.nfc_id
+                    prize_distance_dictionary = intersection.distance_dict
+                    prize_info_dictionary = shared.info_dict
+                    # print(prize_info_dictionary)
+                    if prize_distance_dictionary[prize]['distance'] == 0.5:
+                        prize_heading = (prize_info_dictionary[str(prize)]['heading'] + 4) % 8
+                        current_heading = pose.heading
+                        heading_diff = (prize_heading - current_heading) % 8
+                        if heading_diff <= 4:
+                            prize_turn_direction = 'left'  # Turn left
+                        else:
+                            prize_turn_direction = 'right'  # Turn right 
+                shared.release()
+            
             # Store current pose values before moving
             pose0 = pose.clone()
-            isUturn, travel_time, road_ahead = behaviors.line_follow()
+            isUturn, travel_time, road_ahead = behaviors.line_follow(prize_turn_direction)
             # Outcome B
             if not isUturn:
                 pose.calcmove()
@@ -764,11 +788,12 @@ def main_simple_brain():
     drive_system = DriveSystem(io)
     sensors = LineSensor(io)
     adc = ADC(io)
+    electro_magnet = ElectroMagnet(io)
     proximity_sensor = ProximitySensor(io)
     # Initializing NFC Sensor
     nfc_sensor = NFCSensor()
     # nfc_sensor.read()
-    behaviors = Behaviors(drive_system, sensors, adc, proximity_sensor, nfc_sensor)
+    behaviors = Behaviors(drive_system, sensors, adc, proximity_sensor, nfc_sensor, electro_magnet)
 
     shared = SharedData()
     # Start the ROS worker thread.
@@ -793,6 +818,8 @@ def main_simple_brain():
             # Shutdown cleanly only if still connected
             if io.connected:
                 robot.stop()
+                print('Turning off magnet.')
+                electro_magnet.off()
             # End the ROS thread (send the KeyboardInterrupt exception).
             ctypes.pythonapi.PyThreadState_SetAsyncExc(
             ctypes.c_long(rosthread.ident), ctypes.py_object(KeyboardInterrupt))

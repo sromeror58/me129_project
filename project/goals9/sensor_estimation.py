@@ -425,3 +425,61 @@ class StreetDetector:
             self.state = False
 
         return self.state
+
+class PrizeMarkerDetector(SensorEstimator):
+    """
+    Detector for identifying valid intersections.
+
+    This estimator detects when the robot has reached an intersection by
+    monitoring the state of all line sensors. It uses a running average
+    to filter out noise and implements hysteresis to prevent rapid state changes.
+    """
+
+    def __init__(self, initial_level=0.0, initial_state=False, threshold=0.63):
+        """
+        Initialize the intersection detector.
+
+        Args:
+            initial_level (float): Initial level for the running average (0.0-1.0)
+            initial_state (bool): Initial state of the detector
+            threshold (float): Threshold for state changes (default 0.63, ~one time constant)
+        """
+        self.state = initial_state
+        self.level = initial_level
+        self.threshold = threshold
+        self.tlast = time.time()
+
+    def update(self, ir_readings, time_constant=0.5):
+        """
+        Update the intersection detector with new IR readings.
+
+        This method processes a tuple of IR sensor readings to determine if
+        the robot is at an intersection. It considers an intersection detected
+        when all sensors are active (detecting a line).
+
+        Args:
+            ir_readings (tuple): Tuple of (left, middle, right) IR sensor readings
+            time_constant (float): Time constant for the detector (in seconds)
+
+        Returns:
+            bool: True if a valid intersection is detected, False otherwise
+        """
+        # Raw guess: 010 if all sensors detect prize marker, 0.0 otherwise
+        raw_value = 1.0 if ir_readings==(1,0,1) else 0.0
+
+        # Update the detector level - get current time and calculate time step
+        tnow = time.time()
+        dt = tnow - self.tlast
+        self.tlast = tnow
+
+        # Running average calculation
+        self.level = self.level + dt / time_constant * (raw_value - self.level)
+
+        # Threshold with hysteresis
+        if self.level > self.threshold:
+            self.state = True
+        elif self.level < 1 - self.threshold:
+            self.state = False
+
+        return self.state
+    

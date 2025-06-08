@@ -166,13 +166,13 @@ def fetch(map, pose, shared, take_step):
     if len(num_intersections) == 2:
         print(f'2 INTERSECTIONS WITH DISTANCE OF 0.5')
         # this is the case when we are currently at an intersection of distance 0.5 
-        if (pose.x, pose.y) in num_intersections.keys():
-            return False, None, num_intersections
-        else:
-            goal = next(iter(num_intersections))
-            continue_exploring, command = go_to_goal(take_step, goal, shared, map, pose)
-            # print('IM THE ERROR CCCC!!!!')
-            return continue_exploring, command, num_intersections
+        # if (pose.x, pose.y) in num_intersections.keys():
+        #     return False, None, num_intersections
+        # else:
+        goal = next(iter(num_intersections))
+        continue_exploring, command = go_to_goal(take_step, goal, shared, map, pose)
+        # print('IM THE ERROR CCCC!!!!')
+        return continue_exploring, command, num_intersections
     # case 2: only one intersection exist, so explore until we find the other, which is only up to 3 different
     # candidates
     elif len(num_intersections) == 1:
