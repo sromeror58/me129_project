@@ -3,6 +3,8 @@ import pigpio
 import traceback
 import os
 import argparse
+import threading
+import time
 import copy
 from drive_system import DriveSystem, turn_fit
 from sensor import LineSensor
@@ -15,25 +17,61 @@ from proximitysensor import ProximitySensor
 from ui_main import SharedData
 import threading
 
+class SharedData:
+    """
+    Thread-safe shared data structure for robot control and UI communication.
+    """
+    def __init__(self):
+        self._lock = threading.Lock()
+
+        self.mode = 0  # 0: manual, 1: autonomous, 2: goal-seeking, 3: paused
+        self.step_mode = False  # For step functionality
+        self.paused = False  # For pause functionality
+
+        self.pose = None  # Current robot pose
+        self.goal = None  # (x, y) coordinates
+
+        self.command = None  # Current command to execute
+
+        self.map_filename = None  # For load/save operations
+        self.map = None  # The current map state
+
+        self.running = True  # Control flag for thread termination
+        self.error = None  # For error reporting
+
+        self.num_streets_to_goal = [0, []]  # Track turns needed to get to goal
+
+    def update(self, **kwargs):
+        """Thread-safe update of multiple attributes"""
+        with self._lock:
+            for key, value in kwargs.items():
+                if hasattr(self, key):
+                    setattr(self, key, value)
+
+    def get(self, *attrs):
+        """Thread-safe retrieval of multiple attributes"""
+        with self._lock:
+            return tuple(copy.deepcopy(getattr(self, attr)) for attr in attrs)
+
+    def set(self, **kwargs):
+        """Thread-safe setting of multiple attributes"""
+        with self._lock:
+            for key, value in kwargs.items():
+                if hasattr(self, key):
+                    setattr(self, key, copy.deepcopy(value))
+
 class Robot:
     """
     Class that encapsulates all the robot components such as the drive system
     and sensors.
-
-    This class serves as a high-level interface to control the robot's hardware
-    components, providing methods to initialize and safely shut down the robot.
     """
-
     def __init__(self, io):
-        """
-        Initializes the motors, drive system and sensors.
-
-        Args:
-            io (pigpio.pi): pigpio interface instance for hardware communication
-        """
         self.io = io
         self.drive_system = DriveSystem(io)
         self.sensors = LineSensor(io)
+        self.adc = ADC(io)
+        self.proximity_sensor = ProximitySensor(io)
+        self.behaviors = Behaviors(self.drive_system, self.sensors, self.adc, self.proximity_sensor)
 
     def stop(self):
         """
@@ -54,7 +92,6 @@ class Robot:
                 self.io.stop()
         except Exception as e:
             print(f"Error stopping pigpio: {e}")
-
 
 def initialization_helper(behaviors, robot, heading, x, y):
     """
@@ -106,6 +143,7 @@ def initialization_helper(behaviors, robot, heading, x, y):
 
 def initialize_map(behaviors, robot, heading, x, y, ask=False, no_ask_filename=""):
     """
+    Asks the user to load a map or create a new one, then returns the map and starting pose.
     Asks the user to load a map or create a new one, then returns the map and starting pose.
     """
     choice = "n"
